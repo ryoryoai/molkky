@@ -2,6 +2,9 @@ name = "molkky-worker"
 main = "apps/worker/src/index.ts"
 compatibility_date = "2026-03-05"
 workers_dev = true
+routes = [
+  { pattern = "molkky.rplus-tech.com/api/*", zone_name = "rplus-tech.com" }
+]
 
 [[durable_objects.bindings]]
 name = "ROOM_DO"
