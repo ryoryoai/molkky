@@ -1,0 +1,21 @@
+{
+  "name": "molkky-realtime",
+  "private": true,
+  "version": "0.1.0",
+  "workspaces": [
+    "apps/web",
+    "apps/worker"
+  ],
+  "scripts": {
+    "dev": "concurrently -k \"npm run dev --workspace @molkky/worker\" \"npm run dev --workspace @molkky/web\"",
+    "dev:web": "npm run dev --workspace @molkky/web",
+    "dev:worker": "npm run dev --workspace @molkky/worker",
+    "build": "npm run build --workspace @molkky/worker && npm run build --workspace @molkky/web",
+    "deploy:worker": "npm run deploy --workspace @molkky/worker",
+    "deploy:web": "npm run deploy --workspace @molkky/web"
+  },
+  "devDependencies": {
+    "concurrently": "^9.2.1",
+    "typescript": "^5.9.2"
+  }
+}

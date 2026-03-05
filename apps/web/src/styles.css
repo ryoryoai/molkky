@@ -1,0 +1,166 @@
+:root {
+  color-scheme: light;
+  font-family: "Helvetica Neue", "Noto Sans JP", sans-serif;
+  background: #f3f4f6;
+  color: #111827;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+}
+
+h1,
+h2,
+p {
+  margin: 0;
+}
+
+.container {
+  min-height: 100vh;
+  padding: 24px;
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+}
+
+.panel {
+  width: min(980px, 100%);
+  background: #ffffff;
+  border: 1px solid #d1d5db;
+  border-radius: 14px;
+  padding: 20px;
+  display: grid;
+  gap: 16px;
+}
+
+.room-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+}
+
+.field {
+  display: grid;
+  gap: 6px;
+}
+
+input {
+  width: 100%;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  padding: 10px;
+}
+
+button {
+  border: 1px solid #111827;
+  background: #111827;
+  color: #ffffff;
+  border-radius: 8px;
+  padding: 8px 10px;
+  cursor: pointer;
+}
+
+button:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+.actions-row {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.join-form {
+  display: grid;
+  gap: 8px;
+}
+
+.inline-fields {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 8px;
+}
+
+.muted {
+  color: #6b7280;
+}
+
+.status-box {
+  border: 1px solid #d1d5db;
+  border-radius: 10px;
+  padding: 10px;
+}
+
+.winner {
+  margin-top: 8px;
+  color: #166534;
+  font-weight: 600;
+}
+
+.share-links {
+  border: 1px dashed #9ca3af;
+  border-radius: 10px;
+  padding: 10px;
+  display: grid;
+  gap: 8px;
+}
+
+code {
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+th,
+td {
+  text-align: left;
+  padding: 8px;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.active-row {
+  background: #eff6ff;
+}
+
+.button-grid {
+  display: grid;
+  gap: 6px;
+  grid-template-columns: repeat(auto-fill, minmax(96px, 1fr));
+  margin-bottom: 10px;
+}
+
+.error-text {
+  color: #b91c1c;
+}
+
+.info-text {
+  color: #1d4ed8;
+}
+
+@media (max-width: 700px) {
+  .container {
+    padding: 12px;
+  }
+
+  .panel {
+    padding: 14px;
+  }
+
+  .room-header {
+    display: grid;
+    gap: 6px;
+  }
+
+  .inline-fields {
+    grid-template-columns: 1fr;
+  }
+}

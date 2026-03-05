@@ -1,0 +1,16 @@
+{
+  "name": "@molkky/worker",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev src/index.ts --port 8787",
+    "build": "tsc -p tsconfig.json --noEmit",
+    "deploy": "wrangler deploy"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20260301.0",
+    "typescript": "^5.9.2",
+    "wrangler": "^4.8.0"
+  }
+}
