@@ -1,4 +1,4 @@
-name = "molkky-worker"
+name = "molkky"
 main = "apps/worker/src/index.ts"
 compatibility_date = "2026-03-05"
 workers_dev = true
