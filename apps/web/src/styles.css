@@ -741,10 +741,27 @@ code {
   border-color: rgba(31, 122, 90, 0.3);
 }
 
+.active-toggle {
+  background: rgba(31, 122, 90, 0.14);
+  border: 1px solid rgba(31, 122, 90, 0.22);
+  color: var(--accent);
+}
+
 .score-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 10px;
+}
+
+.correction-banner {
+  margin-bottom: 10px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid rgba(31, 122, 90, 0.22);
+  background: rgba(31, 122, 90, 0.1);
+  color: var(--accent);
+  font-weight: 700;
+  line-height: 1.5;
 }
 
 .score-btn {

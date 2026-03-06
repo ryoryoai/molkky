@@ -89,7 +89,12 @@ interface ClientUndoMessage {
   type: "undo";
 }
 
-type ClientMessage = ClientJoinMessage | ClientActionMessage | ClientUndoMessage;
+interface ClientCorrectLastMessage {
+  type: "correct_last";
+  action: ActionInput;
+}
+
+type ClientMessage = ClientJoinMessage | ClientActionMessage | ClientUndoMessage | ClientCorrectLastMessage;
 
 interface ConnectionMeta {
   socketId: string;
@@ -459,6 +464,9 @@ export class RoomDurableObject {
       case "undo":
         await this.handleUndo(socket);
         return;
+      case "correct_last":
+        await this.handleCorrectLast(socket, (message as ClientCorrectLastMessage).action);
+        return;
       default:
         this.sendError(socket, "unknown message type");
     }
@@ -546,100 +554,20 @@ export class RoomDurableObject {
       return;
     }
 
-    const currentPlayer = state.players.find((player) => player.id === state.turn.playerId);
-    if (!currentPlayer) {
-      this.sendError(socket, "no active turn player");
+    const result = this.applyActionToCurrentTurn(state, action);
+    if (result.error) {
+      this.sendError(socket, result.error);
       return;
-    }
-
-    if (currentPlayer.eliminated) {
-      this.sendError(socket, "eliminated player cannot score");
-      return;
-    }
-
-    const delta = this.computeDelta(action);
-    const prevScore = currentPlayer.score;
-    const prevMissStreak = currentPlayer.missStreak;
-    const prevEliminated: boolean = currentPlayer.eliminated;
-    const prevTurn = cloneTurn(state.turn);
-    const prevStatus = state.status;
-    const prevWinnerPlayerId = state.winnerPlayerId;
-
-    let nextScore = prevScore;
-    let nextMissStreak = delta === 0 ? prevMissStreak + 1 : 0;
-    let nextEliminated: boolean = prevEliminated;
-
-    if (delta > 0) {
-      const provisional = prevScore + delta;
-      if (provisional > 50) {
-        // 50点超えは25点に戻す。
-        nextScore = 25;
-      } else {
-        nextScore = provisional;
-      }
-    }
-
-    // 0点が3連続なら失格。既定ルールとして0点に戻す。
-    if (delta === 0 && nextMissStreak >= 3) {
-      nextEliminated = true;
-      nextScore = 0;
-    }
-
-    currentPlayer.score = nextScore;
-    currentPlayer.missStreak = nextMissStreak;
-    currentPlayer.eliminated = nextEliminated;
-
-    let nextStatus: MatchStatus = state.status;
-    let nextWinnerPlayerId: string | null = state.winnerPlayerId;
-    let nextTurn = cloneTurn(state.turn);
-
-    if (nextScore === 50) {
-      nextStatus = "finished";
-      nextWinnerPlayerId = currentPlayer.id;
-      state.status = nextStatus;
-      state.winnerPlayerId = nextWinnerPlayerId;
-    } else {
-      // 手番の進行はサーバーのみで決定。
-      nextTurn = this.computeNextTurn(state, currentPlayer.id);
-      state.turn = nextTurn;
-    }
-
-    const entry: HistoryEntry = {
-      id: randomBase64Url(10),
-      playerId: currentPlayer.id,
-      input: action,
-      delta,
-      prevScore,
-      nextScore,
-      prevMissStreak,
-      nextMissStreak,
-      prevEliminated,
-      nextEliminated,
-      prevTurn,
-      nextTurn,
-      prevStatus,
-      nextStatus,
-      prevWinnerPlayerId,
-      nextWinnerPlayerId,
-      ts: Date.now()
-    };
-
-    state.history.push(entry);
-    if (state.history.length > HISTORY_LIMIT) {
-      state.history.splice(0, state.history.length - HISTORY_LIMIT);
     }
 
     state.revision += 1;
     await this.saveState(state);
 
-    if (!prevEliminated && nextEliminated) {
-      this.broadcastInfo(`${currentPlayer.name} eliminated`);
+    if (result.playerEliminatedNow) {
+      this.broadcastInfo(`${result.playerName} eliminated`);
     }
-    if (state.status === "finished" && state.winnerPlayerId) {
-      const winner = state.players.find((p) => p.id === state.winnerPlayerId);
-      if (winner) {
-        this.broadcastInfo(`winner: ${winner.name}`);
-      }
+    if (result.winnerName) {
+      this.broadcastInfo(`winner: ${result.winnerName}`);
     }
 
     this.broadcastState();
@@ -669,25 +597,74 @@ export class RoomDurableObject {
       return;
     }
 
-    const player = state.players.find((p) => p.id === entry.playerId);
-    if (!player) {
-      this.sendError(socket, "history references unknown player");
+    const restoreError = this.restorePreviousFromEntry(state, entry);
+    if (restoreError) {
+      this.sendError(socket, restoreError);
       return;
     }
 
-    // 直前1手のみを履歴から戻す。スコア/ミス/失格/手番を復元。
     state.history.pop();
-    player.score = entry.prevScore;
-    player.missStreak = entry.prevMissStreak;
-    player.eliminated = entry.prevEliminated;
-
-    state.turn = cloneTurn(entry.prevTurn);
-    state.status = entry.prevStatus;
-    state.winnerPlayerId = entry.prevWinnerPlayerId;
-
     state.revision += 1;
     await this.saveState(state);
     this.broadcastInfo("last action undone");
+    this.broadcastState();
+  }
+
+  private async handleCorrectLast(socket: WebSocket, action: ActionInput | undefined): Promise<void> {
+    const state = await this.loadState();
+    if (!state) {
+      this.sendError(socket, "room not found");
+      return;
+    }
+
+    const meta = this.connections.get(socket);
+    if (!meta?.canEdit) {
+      this.sendError(socket, "edit token required");
+      return;
+    }
+
+    if (!action || !this.isValidAction(action)) {
+      this.sendError(socket, "invalid action payload");
+      return;
+    }
+
+    const lastEntry = state.history[state.history.length - 1];
+    if (!lastEntry) {
+      this.sendError(socket, "nothing to correct");
+      return;
+    }
+
+    const draft = structuredClone(state) as MatchState;
+    const targetEntry = draft.history[draft.history.length - 1];
+    if (!targetEntry) {
+      this.sendError(socket, "nothing to correct");
+      return;
+    }
+
+    const restoreError = this.restorePreviousFromEntry(draft, targetEntry);
+    if (restoreError) {
+      this.sendError(socket, restoreError);
+      return;
+    }
+    draft.history.pop();
+
+    const result = this.applyActionToCurrentTurn(draft, action);
+    if (result.error) {
+      this.sendError(socket, result.error);
+      return;
+    }
+
+    draft.revision += 1;
+    await this.saveState(draft);
+
+    this.broadcastInfo(`last action corrected by ${result.playerName}`);
+    if (result.playerEliminatedNow) {
+      this.broadcastInfo(`${result.playerName} eliminated`);
+    }
+    if (result.winnerName) {
+      this.broadcastInfo(`winner: ${result.winnerName}`);
+    }
+
     this.broadcastState();
   }
 
@@ -757,6 +734,114 @@ export class RoomDurableObject {
       return action.value ?? 0;
     }
     return 0;
+  }
+
+  private restorePreviousFromEntry(state: MatchState, entry: HistoryEntry): string | null {
+    const player = state.players.find((p) => p.id === entry.playerId);
+    if (!player) {
+      return "history references unknown player";
+    }
+
+    // 直前手の反映前へ巻き戻し、手番・勝敗状態まで復元する。
+    player.score = entry.prevScore;
+    player.missStreak = entry.prevMissStreak;
+    player.eliminated = entry.prevEliminated;
+
+    state.turn = cloneTurn(entry.prevTurn);
+    state.status = entry.prevStatus;
+    state.winnerPlayerId = entry.prevWinnerPlayerId;
+    return null;
+  }
+
+  private applyActionToCurrentTurn(
+    state: MatchState,
+    action: ActionInput
+  ): { error?: string; playerName: string; playerEliminatedNow: boolean; winnerName: string | null } {
+    const currentPlayer = state.players.find((player) => player.id === state.turn.playerId);
+    if (!currentPlayer) {
+      return { error: "no active turn player", playerName: "", playerEliminatedNow: false, winnerName: null };
+    }
+
+    if (currentPlayer.eliminated) {
+      return { error: "eliminated player cannot score", playerName: "", playerEliminatedNow: false, winnerName: null };
+    }
+
+    const delta = this.computeDelta(action);
+    const prevScore = currentPlayer.score;
+    const prevMissStreak = currentPlayer.missStreak;
+    const prevEliminated: boolean = currentPlayer.eliminated;
+    const prevTurn = cloneTurn(state.turn);
+    const prevStatus = state.status;
+    const prevWinnerPlayerId = state.winnerPlayerId;
+
+    let nextScore = prevScore;
+    const nextMissStreak = delta === 0 ? prevMissStreak + 1 : 0;
+    let nextEliminated: boolean = prevEliminated;
+
+    if (delta > 0) {
+      const provisional = prevScore + delta;
+      if (provisional > 50) {
+        nextScore = 25;
+      } else {
+        nextScore = provisional;
+      }
+    }
+
+    if (delta === 0 && nextMissStreak >= 3) {
+      nextEliminated = true;
+      nextScore = 0;
+    }
+
+    currentPlayer.score = nextScore;
+    currentPlayer.missStreak = nextMissStreak;
+    currentPlayer.eliminated = nextEliminated;
+
+    let nextStatus: MatchStatus = state.status;
+    let nextWinnerPlayerId: string | null = state.winnerPlayerId;
+    let nextTurn = cloneTurn(state.turn);
+    let winnerName: string | null = null;
+
+    if (nextScore === 50) {
+      nextStatus = "finished";
+      nextWinnerPlayerId = currentPlayer.id;
+      state.status = nextStatus;
+      state.winnerPlayerId = nextWinnerPlayerId;
+      winnerName = currentPlayer.name;
+    } else {
+      nextTurn = this.computeNextTurn(state, currentPlayer.id);
+      state.turn = nextTurn;
+    }
+
+    const entry: HistoryEntry = {
+      id: randomBase64Url(10),
+      playerId: currentPlayer.id,
+      input: action,
+      delta,
+      prevScore,
+      nextScore,
+      prevMissStreak,
+      nextMissStreak,
+      prevEliminated,
+      nextEliminated,
+      prevTurn,
+      nextTurn,
+      prevStatus,
+      nextStatus,
+      prevWinnerPlayerId,
+      nextWinnerPlayerId,
+      ts: Date.now()
+    };
+
+    state.history.push(entry);
+    if (state.history.length > HISTORY_LIMIT) {
+      state.history.splice(0, state.history.length - HISTORY_LIMIT);
+    }
+
+    return {
+      playerName: currentPlayer.name,
+      playerEliminatedNow: !prevEliminated && nextEliminated,
+      winnerName
+    };
   }
 
   private async isValidToken(state: MatchState, token: string | null): Promise<boolean> {

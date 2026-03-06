@@ -90,15 +90,24 @@ export function RoomPage() {
   const [name, setName] = useState(() => localStorage.getItem(NAME_KEY) ?? "Guest");
   const [connection, setConnection] = useState<ConnectionState>("connecting");
   const [scoreMode, setScoreMode] = useState<ScoreMode>("single");
+  const [correctionMode, setCorrectionMode] = useState(false);
 
   const socketRef = useRef<WebSocket | null>(null);
   const reconnectTimerRef = useRef<number | null>(null);
   const latestNameRef = useRef(name);
   const token = useMemo(() => parseEditToken(window.location.hash), []);
+  const players = state?.players ?? [];
+  const lastEntry = state?.history.length ? state.history[state.history.length - 1] : null;
 
   useEffect(() => {
     latestNameRef.current = name;
   }, [name]);
+
+  useEffect(() => {
+    if (!lastEntry) {
+      setCorrectionMode(false);
+    }
+  }, [lastEntry?.id]);
 
   useEffect(() => {
     if (!roomId) {
@@ -212,6 +221,16 @@ export function RoomPage() {
     socket.send(JSON.stringify({ type: "undo" }));
   };
 
+  const sendCorrectLast = (action: ActionInput): void => {
+    const socket = socketRef.current;
+    if (!socket || socket.readyState !== WebSocket.OPEN) {
+      setError("WebSocketが未接続です");
+      return;
+    }
+    socket.send(JSON.stringify({ type: "correct_last", action }));
+    setCorrectionMode(false);
+  };
+
   const onNameSave = (): void => {
     const next = name.trim() || "Guest";
     localStorage.setItem(NAME_KEY, next);
@@ -227,11 +246,10 @@ export function RoomPage() {
     return null;
   }
 
-  const players = state?.players ?? [];
   const canEdit = state?.session.canEdit ?? false;
   const currentPlayer = players.find((player) => player.id === state?.turn.playerId) ?? null;
   const winner = players.find((player) => player.id === state?.winnerPlayerId) ?? null;
-  const lastEntry = state?.history.length ? state.history[state.history.length - 1] : null;
+  const correctionTarget = lastEntry ? players.find((player) => player.id === lastEntry.playerId) : null;
 
   const lastMessage = (() => {
     if (state?.status === "finished" && winner) {
@@ -259,6 +277,18 @@ export function RoomPage() {
     state?.status === "ongoing" &&
     Boolean(currentPlayer) &&
     !currentPlayer?.eliminated;
+  const canCorrect = canEdit && connection === "open" && Boolean(lastEntry);
+  const scorepadEnabled = correctionMode ? canCorrect : canInput;
+  const scorepadTitle = correctionMode
+    ? `${correctionTarget?.name ?? "直前入力"} を訂正`
+    : currentPlayer
+      ? `${currentPlayer.name} の得点入力`
+      : "得点入力";
+  const scorepadNote = correctionMode
+    ? "下のボタンで正しい結果に置き換えます。手番と得点はサーバーで再計算されます。"
+    : currentPlayer && isReach(currentPlayer)
+      ? `${currentWinningShot} 点で勝ち。50 を超えると 25 点へ戻ります。`
+      : "1本だけ倒したら single、2本以上は multi を選んで入力します。";
 
   return (
     <main className="app">
@@ -276,6 +306,14 @@ export function RoomPage() {
               </span>
               <button type="button" className="ghost-btn" onClick={sendUndo} disabled={!canInput || !state?.history.length}>
                 取り消す
+              </button>
+              <button
+                type="button"
+                className={`ghost-btn ${correctionMode ? "active-toggle" : ""}`}
+                onClick={() => setCorrectionMode((prev) => !prev)}
+                disabled={!canCorrect}
+              >
+                {correctionMode ? "訂正を終了" : "直前を訂正"}
               </button>
             </div>
           </div>
@@ -425,22 +463,24 @@ export function RoomPage() {
               <section className={`scorepad card ${currentPlayer && isReach(currentPlayer) ? "reach-mode" : ""}`}>
                 <div className="scorepad-head">
                   <div>
-                    <h3>{currentPlayer ? `${currentPlayer.name} の得点入力` : "得点入力"}</h3>
-                    <div className="scorepad-note">
-                      {currentPlayer && isReach(currentPlayer)
-                        ? `${currentWinningShot} 点で勝ち。50 を超えると 25 点へ戻ります。`
-                        : "1本だけ倒したら single、2本以上は multi を選んで入力します。"}
-                    </div>
+                    <h3>{scorepadTitle}</h3>
+                    <div className="scorepad-note">{scorepadNote}</div>
                   </div>
                   <span className="pill">{canEdit ? "編集可能" : "閲覧専用"}</span>
                 </div>
+
+                {correctionMode && lastEntry && (
+                  <div className="correction-banner" aria-live="polite">
+                    直前: {correctionTarget?.name ?? "unknown"} / {historyText(lastEntry)}
+                  </div>
+                )}
 
                 <div className="mode-switch" role="tablist" aria-label="score mode">
                   <button
                     type="button"
                     className={`mode-btn ${scoreMode === "single" ? "active" : ""}`}
                     onClick={() => setScoreMode("single")}
-                    disabled={!canInput}
+                    disabled={!scorepadEnabled}
                   >
                     single
                   </button>
@@ -448,7 +488,7 @@ export function RoomPage() {
                     type="button"
                     className={`mode-btn ${scoreMode === "multi" ? "active" : ""}`}
                     onClick={() => setScoreMode("multi")}
-                    disabled={!canInput}
+                    disabled={!scorepadEnabled}
                   >
                     multi
                   </button>
@@ -462,8 +502,10 @@ export function RoomPage() {
                         key={`${scoreMode}-${value}`}
                         type="button"
                         className={`score-btn ${isFinisher ? "finisher" : ""}`}
-                        onClick={() => sendAction({ type: scoreMode, value })}
-                        disabled={!canInput}
+                        onClick={() =>
+                          correctionMode ? sendCorrectLast({ type: scoreMode, value }) : sendAction({ type: scoreMode, value })
+                        }
+                        disabled={!scorepadEnabled}
                       >
                         {value}
                       </button>
@@ -472,10 +514,20 @@ export function RoomPage() {
                 </div>
 
                 <div className="action-row compact">
-                  <button type="button" className="miss-btn" onClick={() => sendAction({ type: "miss" })} disabled={!canInput}>
+                  <button
+                    type="button"
+                    className="miss-btn"
+                    onClick={() => (correctionMode ? sendCorrectLast({ type: "miss" }) : sendAction({ type: "miss" }))}
+                    disabled={!scorepadEnabled}
+                  >
                     miss
                   </button>
-                  <button type="button" className="miss-btn foul" onClick={() => sendAction({ type: "foul" })} disabled={!canInput}>
+                  <button
+                    type="button"
+                    className="miss-btn foul"
+                    onClick={() => (correctionMode ? sendCorrectLast({ type: "foul" }) : sendAction({ type: "foul" }))}
+                    disabled={!scorepadEnabled}
+                  >
                     foul
                   </button>
                 </div>
