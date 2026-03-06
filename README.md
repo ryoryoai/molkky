@@ -90,6 +90,29 @@ Cloudflare Pages UI で設定する場合:
 - Build command: `npm run build --workspace @molkky/web`
 - Build output directory: `apps/web/dist`
 
+## GitHub Actions で自動デプロイ
+
+`main` ブランチへの push 時に、以下の順で自動実行されます。
+
+1. Worker をデプロイ
+2. Web(Pages) をビルドしてデプロイ
+
+ワークフロー定義:
+
+- `.github/workflows/deploy.yml`
+
+事前に GitHub リポジトリの Settings で以下を設定してください。
+
+- Secrets
+  - `CLOUDFLARE_API_TOKEN`: Workers / Pages のデプロイ権限を持つ API Token
+  - `CLOUDFLARE_ACCOUNT_ID`: Cloudflare Account ID
+- Variables
+  - `VITE_API_BASE`（任意）: 例 `https://molkky.rplus-tech.com`
+
+補足:
+
+- Worker 側で使用する `TOKEN_PEPPER` は Cloudflare 側の Worker Secret です。未設定の場合はデプロイ後の実行時にエラーになります。初回のみ手動で設定してください。
+
 ## 動作確認（ブラウザ2つ）
 
 1. ブラウザAでトップを開き、名前入力して「新規ルーム作成」
