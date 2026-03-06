@@ -135,7 +135,7 @@ Cloudflare Pages UI で設定する場合:
 
 ## API
 
-- `POST /api/room` -> `{ roomId, editToken, viewUrl, editUrl }`
+- `POST /api/room` body: `{ "roomId"?: string }`（省略/空文字なら自動生成） -> `{ roomId, editToken, viewUrl, editUrl }`
 - `GET /api/room/:roomId/snapshot`
 - `GET /api/room/:roomId/ws?token=...`
 

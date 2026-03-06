@@ -190,6 +190,38 @@ function sanitizeName(name: string): string {
   return trimmed.slice(0, 24);
 }
 
+function parseRequestedRoomId(value: unknown): { roomId: string | null; error?: string } {
+  if (value === undefined || value === null) {
+    return { roomId: null };
+  }
+
+  if (typeof value !== "string") {
+    return { roomId: null, error: "roomId must be string" };
+  }
+
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return { roomId: null };
+  }
+
+  if (trimmed.length > 64) {
+    return { roomId: null, error: "roomId must be 64 characters or less" };
+  }
+
+  if (/[/?#]/.test(trimmed)) {
+    return { roomId: null, error: "roomId contains invalid characters: / ? #" };
+  }
+
+  return { roomId: trimmed };
+}
+
+function buildShareUrls(origin: string, roomId: string, editToken: string): { viewUrl: string; editUrl: string } {
+  const encodedRoomId = encodeURIComponent(roomId);
+  const viewUrl = `${origin}/room/${encodedRoomId}`;
+  const editUrl = `${origin}/room/${encodedRoomId}#edit=${editToken}`;
+  return { viewUrl, editUrl };
+}
+
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url);
@@ -200,9 +232,23 @@ export default {
 
     if (request.method === "POST" && url.pathname === "/api/room") {
       const origin = request.headers.get("origin") ?? url.origin;
+      let payload: { roomId?: unknown } = {};
 
-      for (let i = 0; i < 5; i += 1) {
-        const roomId = randomBase64Url(16);
+      try {
+        const rawBody = await request.text();
+        if (rawBody.trim()) {
+          payload = JSON.parse(rawBody) as { roomId?: unknown };
+        }
+      } catch {
+        return errorResponse("invalid json payload", 400);
+      }
+
+      const parsedRoomId = parseRequestedRoomId(payload.roomId);
+      if (parsedRoomId.error) {
+        return errorResponse(parsedRoomId.error, 400);
+      }
+
+      const createSpecificRoom = async (roomId: string): Promise<Response> => {
         const editToken = randomBase64Url(24);
         const editTokenHash = await hashEditToken(editToken, env.TOKEN_PEPPER ?? "");
         const stub = env.ROOM_DO.get(env.ROOM_DO.idFromName(roomId));
@@ -213,13 +259,29 @@ export default {
         });
 
         if (initRes.status === 201) {
-          const viewUrl = `${origin}/room/${roomId}`;
-          const editUrl = `${origin}/room/${roomId}#edit=${editToken}`;
+          const { viewUrl, editUrl } = buildShareUrls(origin, roomId, editToken);
           return jsonResponse({ roomId, editToken, viewUrl, editUrl }, 201);
         }
 
-        if (initRes.status !== 409) {
-          return withCors(initRes);
+        return withCors(initRes);
+      };
+
+      if (parsedRoomId.roomId) {
+        const response = await createSpecificRoom(parsedRoomId.roomId);
+        if (response.status === 409) {
+          return errorResponse("room already exists", 409);
+        }
+        return response;
+      }
+
+      for (let i = 0; i < 5; i += 1) {
+        const roomId = randomBase64Url(16);
+        const response = await createSpecificRoom(roomId);
+        if (response.status === 201) {
+          return response;
+        }
+        if (response.status !== 409) {
+          return response;
         }
       }
 

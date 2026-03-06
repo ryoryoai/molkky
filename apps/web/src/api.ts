@@ -36,13 +36,20 @@ export function wsUrl(path: string): string {
   return full;
 }
 
-export async function createRoom(): Promise<CreateRoomResponse> {
+interface CreateRoomInput {
+  roomId?: string;
+}
+
+export async function createRoom(input?: CreateRoomInput): Promise<CreateRoomResponse> {
+  const trimmedRoomId = input?.roomId?.trim();
+  const payload = trimmedRoomId ? { roomId: trimmedRoomId } : {};
+
   const response = await fetch(apiUrl("/api/room"), {
     method: "POST",
     headers: {
       "Content-Type": "application/json"
     },
-    body: JSON.stringify({})
+    body: JSON.stringify(payload)
   });
 
   if (!response.ok) {

@@ -11,10 +11,12 @@ function readSavedName(): string {
 export function HomePage() {
   const navigate = useNavigate();
   const [name, setName] = useState<string>(() => readSavedName());
+  const [gameName, setGameName] = useState("");
   const [roomId, setRoomId] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
+  const normalizedGameName = useMemo(() => gameName.trim(), [gameName]);
   const normalizedRoomId = useMemo(() => roomId.trim(), [roomId]);
 
   const persistName = (): string => {
@@ -31,8 +33,8 @@ export function HomePage() {
     setError("");
     try {
       const finalName = persistName();
-      const created = await createRoom();
-      navigate(`/room/${created.roomId}#edit=${created.editToken}`, {
+      const created = await createRoom({ roomId: normalizedGameName || undefined });
+      navigate(`/room/${encodeURIComponent(created.roomId)}#edit=${created.editToken}`, {
         state: { name: finalName }
       });
     } catch (e) {
@@ -50,7 +52,7 @@ export function HomePage() {
       return;
     }
     persistName();
-    navigate(`/room/${normalizedRoomId}`);
+    navigate(`/room/${encodeURIComponent(normalizedRoomId)}`);
   };
 
   return (
@@ -66,6 +68,16 @@ export function HomePage() {
             value={name}
             onChange={(event) => setName(event.currentTarget.value)}
             placeholder="例: Taro"
+          />
+        </label>
+
+        <label className="field">
+          <span>ゲーム名（任意）</span>
+          <input
+            type="text"
+            value={gameName}
+            onChange={(event) => setGameName(event.currentTarget.value)}
+            placeholder="空欄なら自動生成"
           />
         </label>
 
