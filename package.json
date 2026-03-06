@@ -11,10 +11,12 @@
     "dev:web": "npm run dev --workspace @molkky/web",
     "dev:worker": "npm run dev --workspace @molkky/worker",
     "build": "npm run build --workspace @molkky/worker && npm run build --workspace @molkky/web",
+    "test:e2e": "playwright test",
     "deploy:worker": "npm run deploy --workspace @molkky/worker",
     "deploy:web": "npm run deploy --workspace @molkky/web"
   },
   "devDependencies": {
+    "@playwright/test": "^1.58.2",
     "concurrently": "^9.2.1",
     "typescript": "^5.9.2"
   }
