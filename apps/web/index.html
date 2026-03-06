@@ -1,12 +1,1576 @@
 <!doctype html>
 <html lang="ja">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Molkky Score Sync</title>
-  </head>
-  <body>
-    <div id="root"></div>
-    <script type="module" src="/src/main.tsx"></script>
-  </body>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#f6f2e8">
+  <title>モルック スコア</title>
+  <style>
+    :root {
+      --bg: #f6f2e8;
+      --bg-2: #fffaf2;
+      --card: rgba(255,255,255,0.9);
+      --ink: #27333a;
+      --muted: #6f7c82;
+      --line: rgba(39, 51, 58, 0.1);
+      --accent: #1f7a5a;
+      --accent-soft: rgba(31, 122, 90, 0.12);
+      --reach: #f0c849;
+      --reach-strong: #e4b120;
+      --danger: #d94b4b;
+      --danger-soft: rgba(217, 75, 75, 0.12);
+      --shadow: 0 12px 40px rgba(39, 51, 58, 0.08);
+      --radius: 22px;
+      --tap: 68px;
+    }
+
+    * { box-sizing: border-box; }
+
+    html, body {
+      margin: 0;
+      min-height: 100%;
+      font-family: -apple-system, BlinkMacSystemFont, "Hiragino Sans", "Yu Gothic", "Noto Sans JP", sans-serif;
+      color: var(--ink);
+      background:
+        radial-gradient(circle at top right, rgba(240, 200, 73, 0.16), transparent 32%),
+        radial-gradient(circle at bottom left, rgba(31, 122, 90, 0.12), transparent 30%),
+        linear-gradient(180deg, var(--bg-2), var(--bg));
+    }
+
+    button, input { font: inherit; }
+
+    button {
+      border: 0;
+      background: white;
+      color: var(--ink);
+      border-radius: 18px;
+      box-shadow: 0 6px 18px rgba(39, 51, 58, 0.07);
+      cursor: pointer;
+      touch-action: manipulation;
+      transition: transform 0.08s ease, box-shadow 0.2s ease, background 0.2s ease, opacity 0.2s ease;
+    }
+
+    button:active { transform: scale(0.98); }
+    button:disabled { opacity: 0.5; cursor: not-allowed; }
+
+    input {
+      width: 100%;
+      border-radius: 16px;
+      border: 1px solid var(--line);
+      background: rgba(255,255,255,0.92);
+      padding: 14px 16px;
+      color: var(--ink);
+      outline: none;
+    }
+
+    input:focus {
+      border-color: rgba(31, 122, 90, 0.35);
+      box-shadow: 0 0 0 4px rgba(31, 122, 90, 0.12);
+    }
+
+    .app {
+      width: min(100%, 980px);
+      margin: 0 auto;
+      padding: 18px 16px calc(24px + env(safe-area-inset-bottom));
+    }
+
+    .shell {
+      display: grid;
+      gap: 16px;
+    }
+
+    .card {
+      background: var(--card);
+      border: 1px solid rgba(255,255,255,0.7);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      backdrop-filter: blur(10px);
+    }
+
+    .setup-card,
+    .panel {
+      padding: 18px;
+    }
+
+    .title-row {
+      display: flex;
+      gap: 12px;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+    }
+
+    .title-wrap h1,
+    .title-wrap h2,
+    .panel h2,
+    .panel h3,
+    .setup-card h2,
+    .hero-title,
+    .winner-name {
+      margin: 0;
+    }
+
+    .title-wrap h1 {
+      font-size: clamp(1.5rem, 2vw + 1rem, 2.2rem);
+      letter-spacing: 0.02em;
+    }
+
+    .subtitle {
+      margin: 8px 0 0;
+      color: var(--muted);
+      line-height: 1.6;
+      font-size: 0.96rem;
+    }
+
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 14px;
+      border-radius: 999px;
+      background: rgba(255,255,255,0.8);
+      border: 1px solid var(--line);
+      color: var(--muted);
+      font-size: 0.9rem;
+      white-space: nowrap;
+    }
+
+    .draft-list {
+      display: grid;
+      gap: 12px;
+      margin-top: 18px;
+    }
+
+    .draft-item {
+      display: grid;
+      grid-template-columns: auto 1fr auto;
+      gap: 10px;
+      align-items: center;
+      padding: 10px;
+      background: rgba(255,255,255,0.65);
+      border: 1px solid rgba(39, 51, 58, 0.07);
+      border-radius: 18px;
+    }
+
+    .order-chip {
+      width: 34px;
+      height: 34px;
+      display: grid;
+      place-items: center;
+      border-radius: 999px;
+      background: var(--accent-soft);
+      color: var(--accent);
+      font-weight: 800;
+      font-size: 0.92rem;
+    }
+
+    .mini-btn,
+    .ghost-btn,
+    .danger-btn,
+    .primary-btn {
+      min-height: 48px;
+      padding: 0 14px;
+      font-weight: 700;
+    }
+
+    .mini-btn {
+      min-width: 48px;
+      background: rgba(255,255,255,0.92);
+      border: 1px solid var(--line);
+      box-shadow: none;
+    }
+
+    .ghost-btn {
+      background: rgba(255,255,255,0.82);
+      border: 1px solid var(--line);
+      box-shadow: none;
+    }
+
+    .primary-btn {
+      background: linear-gradient(180deg, #2a906a, #1f7a5a);
+      color: white;
+    }
+
+    .danger-btn {
+      background: rgba(217, 75, 75, 0.14);
+      color: var(--danger);
+      border: 1px solid rgba(217, 75, 75, 0.15);
+      box-shadow: none;
+    }
+
+    .setup-actions,
+    .action-row,
+    .finish-actions {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      margin-top: 16px;
+    }
+
+    .tip-grid {
+      display: grid;
+      gap: 12px;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      margin-top: 16px;
+    }
+
+    .tip {
+      padding: 14px;
+      border-radius: 18px;
+      background: rgba(255,255,255,0.64);
+      border: 1px solid rgba(39, 51, 58, 0.07);
+    }
+
+    .tip strong {
+      display: block;
+      margin-bottom: 6px;
+      font-size: 0.98rem;
+    }
+
+    .game-header {
+      display: flex;
+      gap: 12px;
+      justify-content: space-between;
+      align-items: flex-start;
+      flex-wrap: wrap;
+    }
+
+    .top-actions {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .hero {
+      padding: 18px;
+      display: grid;
+      gap: 14px;
+      border: 1px solid rgba(255,255,255,0.7);
+      position: relative;
+      overflow: hidden;
+      background:
+        linear-gradient(180deg, rgba(255,255,255,0.94), rgba(255,255,255,0.88));
+    }
+
+    .hero::after {
+      content: "";
+      position: absolute;
+      inset: auto -60px -60px auto;
+      width: 170px;
+      height: 170px;
+      border-radius: 50%;
+      background: radial-gradient(circle, rgba(31, 122, 90, 0.14), transparent 66%);
+      pointer-events: none;
+    }
+
+    .hero.reach {
+      box-shadow: 0 0 0 4px rgba(240, 200, 73, 0.22), 0 18px 48px rgba(240, 200, 73, 0.2);
+      background:
+        radial-gradient(circle at top right, rgba(240, 200, 73, 0.18), transparent 34%),
+        linear-gradient(180deg, rgba(255,253,244,0.98), rgba(255,245,209,0.96));
+      animation: reachPulse 1.6s ease-in-out infinite;
+    }
+
+    .hero.reach::after {
+      width: 220px;
+      height: 220px;
+      background: radial-gradient(circle, rgba(240, 200, 73, 0.28), transparent 66%);
+      animation: reachGlow 2.1s ease-in-out infinite;
+    }
+
+    .hero.miss-1 { background: linear-gradient(180deg, rgba(255,255,255,0.94), rgba(255,237,237,0.96)); }
+    .hero.miss-2 { background: linear-gradient(180deg, rgba(255,249,249,0.96), rgba(255,225,225,0.98)); }
+    .hero.miss-3,
+    .hero.retired { background: linear-gradient(180deg, rgba(255,239,239,0.98), rgba(255,214,214,0.98)); }
+
+    @keyframes reachPulse {
+      0%, 100% { transform: translateY(0); }
+      50% { transform: translateY(-2px); }
+    }
+
+    @keyframes reachGlow {
+      0%, 100% { transform: scale(0.94); opacity: 0.58; }
+      50% { transform: scale(1.08); opacity: 0.92; }
+    }
+
+    .hero-top {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 12px;
+      flex-wrap: wrap;
+      position: relative;
+      z-index: 1;
+    }
+
+    .turn-pill {
+      background: var(--accent-soft);
+      color: var(--accent);
+      border-radius: 999px;
+      padding: 8px 12px;
+      font-size: 0.85rem;
+      font-weight: 800;
+      display: inline-flex;
+      gap: 8px;
+      align-items: center;
+    }
+
+    .hero-title {
+      font-size: clamp(1.4rem, 2vw + 1rem, 2rem);
+      font-weight: 900;
+      letter-spacing: 0.02em;
+    }
+
+    .hero-sub {
+      margin: 6px 0 0;
+      color: var(--muted);
+      line-height: 1.5;
+    }
+
+    .hero-score-row {
+      display: flex;
+      gap: 14px;
+      align-items: center;
+      flex-wrap: wrap;
+      position: relative;
+      z-index: 1;
+    }
+
+    .hero-score {
+      font-size: clamp(4rem, 14vw, 6rem);
+      line-height: 0.94;
+      font-weight: 900;
+      letter-spacing: -0.04em;
+      min-width: 1.8em;
+    }
+
+    .meta-stack {
+      display: grid;
+      gap: 10px;
+      min-width: 165px;
+    }
+
+    .meta-box {
+      padding: 12px 14px;
+      border-radius: 18px;
+      background: rgba(255,255,255,0.75);
+      border: 1px solid rgba(39, 51, 58, 0.06);
+    }
+
+    .meta-label {
+      display: block;
+      color: var(--muted);
+      font-size: 0.78rem;
+      margin-bottom: 4px;
+    }
+
+    .meta-value {
+      font-weight: 800;
+      font-size: 1.12rem;
+    }
+
+    .badge-row {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      align-items: center;
+      position: relative;
+      z-index: 1;
+    }
+
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 8px 12px;
+      border-radius: 999px;
+      font-size: 0.84rem;
+      font-weight: 800;
+      border: 1px solid transparent;
+      white-space: nowrap;
+    }
+
+    .badge.reach {
+      background: rgba(240, 200, 73, 0.2);
+      color: #7b5b00;
+      border-color: rgba(240, 200, 73, 0.32);
+    }
+
+    .badge.safe {
+      background: rgba(31, 122, 90, 0.12);
+      color: var(--accent);
+      border-color: rgba(31, 122, 90, 0.18);
+    }
+
+    .badge.warn {
+      background: rgba(217, 75, 75, 0.12);
+      color: var(--danger);
+      border-color: rgba(217, 75, 75, 0.16);
+    }
+
+    .badge.out {
+      background: rgba(217, 75, 75, 0.18);
+      color: #8f2323;
+      border-color: rgba(217, 75, 75, 0.2);
+    }
+
+    .message {
+      padding: 14px 16px;
+      border-radius: 18px;
+      border: 1px solid rgba(39, 51, 58, 0.06);
+      background: rgba(255,255,255,0.75);
+      line-height: 1.6;
+      font-weight: 700;
+    }
+
+    .reach-callout {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      flex-wrap: wrap;
+      padding: 14px 16px;
+      border-radius: 20px;
+      background: rgba(255,255,255,0.78);
+      border: 1px solid rgba(240, 200, 73, 0.38);
+      box-shadow: 0 12px 24px rgba(240, 200, 73, 0.14);
+      position: relative;
+      z-index: 1;
+    }
+
+    .reach-copy {
+      display: grid;
+      gap: 4px;
+      min-width: 0;
+    }
+
+    .reach-label {
+      font-size: 1rem;
+      font-weight: 900;
+      line-height: 1.35;
+    }
+
+    .reach-copy span {
+      color: #7b5b00;
+      line-height: 1.55;
+      font-weight: 700;
+    }
+
+    .reach-target {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 10px 14px;
+      border-radius: 999px;
+      background: linear-gradient(180deg, rgba(240, 200, 73, 0.28), rgba(240, 200, 73, 0.18));
+      border: 1px solid rgba(240, 200, 73, 0.36);
+      font-weight: 900;
+      white-space: nowrap;
+    }
+
+    .players-grid {
+      display: grid;
+      gap: 12px;
+      grid-template-columns: repeat(auto-fit, minmax(165px, 1fr));
+    }
+
+    .player-card {
+      padding: 14px;
+      border-radius: 22px;
+      background: rgba(255,255,255,0.82);
+      border: 1px solid rgba(39, 51, 58, 0.08);
+      display: grid;
+      gap: 10px;
+      box-shadow: 0 10px 24px rgba(39, 51, 58, 0.05);
+    }
+
+    .player-card.active {
+      border-color: rgba(31, 122, 90, 0.26);
+      box-shadow: 0 0 0 3px rgba(31, 122, 90, 0.08), 0 16px 26px rgba(39, 51, 58, 0.08);
+    }
+
+    .player-card.reach {
+      border-color: rgba(240, 200, 73, 0.34);
+      box-shadow: 0 0 0 3px rgba(240, 200, 73, 0.12), 0 16px 28px rgba(240, 200, 73, 0.15);
+    }
+
+    .player-card.retired { opacity: 0.78; }
+    .player-card.miss-1 { background: linear-gradient(180deg, rgba(255,255,255,0.88), rgba(255,241,241,0.94)); }
+    .player-card.miss-2 { background: linear-gradient(180deg, rgba(255,251,251,0.92), rgba(255,231,231,0.96)); }
+    .player-card.miss-3,
+    .player-card.retired { background: linear-gradient(180deg, rgba(255,241,241,0.94), rgba(255,219,219,0.98)); }
+
+    .player-top {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+    }
+
+    .player-name {
+      font-size: 1rem;
+      font-weight: 800;
+      line-height: 1.4;
+      word-break: break-word;
+      margin-right: 8px;
+    }
+
+    .player-score {
+      font-size: 2.4rem;
+      font-weight: 900;
+      letter-spacing: -0.03em;
+      line-height: 1;
+    }
+
+    .player-meta {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      color: var(--muted);
+      font-size: 0.86rem;
+      line-height: 1.5;
+    }
+
+    .progress {
+      width: 100%;
+      height: 10px;
+      border-radius: 999px;
+      background: rgba(39, 51, 58, 0.08);
+      overflow: hidden;
+    }
+
+    .progress-fill {
+      height: 100%;
+      border-radius: inherit;
+      background: linear-gradient(90deg, #2a906a, #1f7a5a);
+      width: 0%;
+      transition: width 0.25s ease;
+    }
+
+    .player-card.reach .progress-fill,
+    .hero.reach .progress-fill {
+      background: linear-gradient(90deg, var(--reach), var(--reach-strong));
+    }
+
+    .player-card.retired .progress-fill {
+      background: linear-gradient(90deg, rgba(217, 75, 75, 0.5), rgba(217, 75, 75, 0.8));
+    }
+
+    .miss-strip {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      color: var(--muted);
+      font-size: 0.85rem;
+    }
+
+    .miss-dots {
+      display: inline-flex;
+      gap: 6px;
+      align-items: center;
+    }
+
+    .miss-dot {
+      width: 12px;
+      height: 12px;
+      border-radius: 999px;
+      border: 1px solid rgba(39, 51, 58, 0.12);
+      background: rgba(39, 51, 58, 0.08);
+    }
+
+    .miss-dot.on {
+      background: rgba(217, 75, 75, 0.88);
+      border-color: rgba(217, 75, 75, 0.65);
+      box-shadow: 0 0 0 3px rgba(217, 75, 75, 0.12);
+    }
+
+    .scorepad {
+      position: sticky;
+      bottom: 0;
+      padding: 16px;
+      background: rgba(246, 242, 232, 0.85);
+      border: 1px solid rgba(255,255,255,0.7);
+      backdrop-filter: blur(12px);
+    }
+
+    .scorepad-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 10px;
+      flex-wrap: wrap;
+      margin-bottom: 14px;
+    }
+
+    .scorepad h3 {
+      margin: 0;
+      font-size: 1.1rem;
+    }
+
+    .scorepad-note {
+      color: var(--muted);
+      line-height: 1.55;
+      margin-top: 6px;
+      font-size: 0.92rem;
+    }
+
+    .score-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 10px;
+    }
+
+    .score-btn {
+      min-height: var(--tap);
+      font-size: clamp(1.2rem, 3vw, 1.5rem);
+      font-weight: 900;
+      background: rgba(255,255,255,0.96);
+    }
+
+    .scorepad.reach-mode {
+      box-shadow: 0 0 0 3px rgba(240, 200, 73, 0.14), var(--shadow);
+    }
+
+    .scorepad.reach-mode .scorepad-note {
+      color: #7b5b00;
+      font-weight: 700;
+    }
+
+    .score-btn.finisher {
+      background: linear-gradient(180deg, rgba(255, 245, 209, 0.98), rgba(240, 200, 73, 0.28));
+      border: 1px solid rgba(240, 200, 73, 0.42);
+      box-shadow: 0 0 0 3px rgba(240, 200, 73, 0.12), 0 10px 24px rgba(240, 200, 73, 0.16);
+      animation: finisherPulse 1.5s ease-in-out infinite;
+    }
+
+    .score-btn:hover,
+    .ghost-btn:hover,
+    .mini-btn:hover,
+    .primary-btn:hover,
+    .danger-btn:hover {
+      box-shadow: 0 10px 24px rgba(39, 51, 58, 0.09);
+    }
+
+    .miss-btn {
+      width: 100%;
+      min-height: calc(var(--tap) - 2px);
+      margin-top: 10px;
+      background: rgba(217, 75, 75, 0.1);
+      color: var(--danger);
+      font-size: 1.12rem;
+      font-weight: 900;
+      border: 1px solid rgba(217, 75, 75, 0.14);
+      box-shadow: none;
+    }
+
+    @keyframes finisherPulse {
+      0%, 100% { transform: translateY(0); }
+      50% { transform: translateY(-2px) scale(1.02); }
+    }
+
+    .history-list {
+      display: grid;
+      gap: 10px;
+      margin-top: 12px;
+    }
+
+    .history-item {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      justify-content: space-between;
+      padding: 12px 14px;
+      border-radius: 16px;
+      background: rgba(255,255,255,0.72);
+      border: 1px solid rgba(39, 51, 58, 0.06);
+    }
+
+    .history-main {
+      display: grid;
+      gap: 4px;
+      min-width: 0;
+    }
+
+    .history-main strong,
+    .history-main span {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .history-score {
+      font-weight: 900;
+      font-size: 1rem;
+      white-space: nowrap;
+    }
+
+    details {
+      border-radius: 18px;
+      background: rgba(255,255,255,0.7);
+      border: 1px solid rgba(39, 51, 58, 0.06);
+      padding: 12px 14px;
+    }
+
+    summary {
+      cursor: pointer;
+      font-weight: 800;
+      list-style: none;
+      outline: none;
+    }
+
+    summary::-webkit-details-marker { display: none; }
+
+    .rule-list {
+      display: grid;
+      gap: 10px;
+      margin-top: 12px;
+      color: var(--muted);
+      line-height: 1.6;
+    }
+
+    .finish {
+      padding: 22px;
+      text-align: center;
+      display: grid;
+      gap: 14px;
+    }
+
+    .winner-mark {
+      width: 84px;
+      height: 84px;
+      border-radius: 50%;
+      display: grid;
+      place-items: center;
+      margin: 0 auto;
+      font-size: 2rem;
+      background: rgba(240, 200, 73, 0.2);
+      border: 1px solid rgba(240, 200, 73, 0.35);
+    }
+
+    .winner-name {
+      font-size: clamp(1.5rem, 3vw, 2.2rem);
+      font-weight: 900;
+    }
+
+    .finish-text {
+      margin: 0;
+      color: var(--muted);
+      line-height: 1.7;
+    }
+
+    .muted {
+      color: var(--muted);
+    }
+
+    .sr-only {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      padding: 0;
+      margin: -1px;
+      overflow: hidden;
+      clip: rect(0, 0, 0, 0);
+      white-space: nowrap;
+      border: 0;
+    }
+
+    @media (min-width: 740px) {
+      .score-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+      .game-layout {
+        display: grid;
+        grid-template-columns: 1.25fr 0.95fr;
+        gap: 16px;
+        align-items: start;
+      }
+      .game-side {
+        display: grid;
+        gap: 16px;
+        position: sticky;
+        top: 12px;
+      }
+      .scorepad { position: static; }
+    }
+
+    @media (max-width: 480px) {
+      :root { --tap: 64px; }
+      .app { padding-left: 12px; padding-right: 12px; }
+      .setup-card, .panel, .hero, .scorepad, .finish { padding: 16px; }
+      .hero-score { font-size: clamp(3.6rem, 21vw, 4.8rem); }
+      .score-grid { gap: 8px; }
+      .player-score { font-size: 2.2rem; }
+    }
+  </style>
+</head>
+<body>
+  <main class="app">
+    <div id="app" class="shell"></div>
+  </main>
+
+  <script>
+    const STORAGE_KEY = "molkky-score-app-v1";
+    const MAX_UNDO = 40;
+    let undoStack = [];
+
+    const $app = document.getElementById("app");
+
+    function makeFreshState() {
+      return {
+        phase: "setup",
+        draftNames: ["プレイヤー 1", "プレイヤー 2"],
+        players: [],
+        currentIndex: 0,
+        log: [],
+        lastMessage: "名前を入れてゲーム開始",
+        winnerId: null
+      };
+    }
+
+    let state = loadState() || makeFreshState();
+    normalizeState();
+    render();
+
+    $app.addEventListener("click", handleClick);
+    $app.addEventListener("input", handleInput);
+
+    function normalizeState() {
+      if (!state || typeof state !== "object") state = makeFreshState();
+      state.phase = ["setup", "game", "finished"].includes(state.phase) ? state.phase : "setup";
+      state.draftNames = Array.isArray(state.draftNames) && state.draftNames.length
+        ? state.draftNames.map((name, i) => typeof name === "string" ? name : `プレイヤー ${i + 1}`)
+        : ["プレイヤー 1", "プレイヤー 2"];
+      state.players = Array.isArray(state.players) ? state.players.map(normalizePlayer) : [];
+      state.log = Array.isArray(state.log) ? state.log.slice(-80) : [];
+      state.currentIndex = Number.isInteger(state.currentIndex) ? state.currentIndex : 0;
+      state.lastMessage = typeof state.lastMessage === "string" ? state.lastMessage : "";
+      state.winnerId = state.winnerId || null;
+
+      if ((state.phase === "game" || state.phase === "finished") && state.players.length) {
+        if (state.players.every(player => player.retired)) {
+          state.phase = "finished";
+        }
+        if (state.currentIndex >= state.players.length || state.currentIndex < 0 || state.players[state.currentIndex]?.retired) {
+          const firstActive = findNextActiveIndex(state.currentIndex - 1);
+          state.currentIndex = firstActive >= 0 ? firstActive : 0;
+        }
+      }
+    }
+
+    function normalizePlayer(player, index = 0) {
+      return {
+        id: player?.id || `p-${Date.now()}-${index}-${Math.random().toString(36).slice(2, 8)}`,
+        name: typeof player?.name === "string" && player.name.trim() ? player.name : `プレイヤー ${index + 1}`,
+        score: Number.isFinite(player?.score) ? Math.max(0, Math.min(50, player.score)) : 0,
+        missStreak: Number.isFinite(player?.missStreak) ? Math.max(0, Math.min(3, player.missStreak)) : 0,
+        retired: Boolean(player?.retired)
+      };
+    }
+
+    function saveState() {
+      try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+      } catch (error) {
+        console.warn("save failed", error);
+      }
+    }
+
+    function loadState() {
+      try {
+        const raw = localStorage.getItem(STORAGE_KEY);
+        return raw ? JSON.parse(raw) : null;
+      } catch (error) {
+        console.warn("load failed", error);
+        return null;
+      }
+    }
+
+    function clearState() {
+      try {
+        localStorage.removeItem(STORAGE_KEY);
+      } catch (error) {
+        console.warn("clear failed", error);
+      }
+    }
+
+    function escapeHtml(value) {
+      return String(value)
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/\"/g, "&quot;")
+        .replace(/'/g, "&#039;");
+    }
+
+    function currentPlayer() {
+      return state.players[state.currentIndex] || null;
+    }
+
+    function activePlayers() {
+      return state.players.filter(player => !player.retired);
+    }
+
+    function playerClass(player, active) {
+      const classes = ["player-card", `miss-${player.missStreak}`];
+      if (active) classes.push("active");
+      if (isReach(player)) classes.push("reach");
+      if (player.retired) classes.push("retired");
+      return classes.join(" ");
+    }
+
+    function heroClass(player) {
+      if (!player) return "hero card";
+      const classes = ["hero", "card", `miss-${player.missStreak}`];
+      if (isReach(player)) classes.push("reach");
+      if (player.retired) classes.push("retired");
+      return classes.join(" ");
+    }
+
+    function isReach(player) {
+      return !player.retired && player.score >= 38 && player.score < 50;
+    }
+
+    function remainingToWin(player) {
+      return Math.max(0, 50 - player.score);
+    }
+
+    function winningShot(player) {
+      return isReach(player) ? remainingToWin(player) : null;
+    }
+
+    function heroSubtitle(player) {
+      if (!player) return "";
+      if (isReach(player)) {
+        const shot = winningShot(player);
+        return `✨ リーチ中。次に ${shot} 点で 50 点ちょうどです。`;
+      }
+      return "累積ポイントを大きく表示。初心者でも「あ、いま誰の番か」が迷子になりません。";
+    }
+
+    function renderReachCallout(player) {
+      if (!isReach(player)) return "";
+      const shot = winningShot(player);
+      const intro = player.score === 38 ? "✨ リーチ突入！" : "🔥 勝負どころ";
+      return `
+        <div class="reach-callout" aria-live="polite">
+          <div class="reach-copy">
+            <div class="reach-label">${intro}</div>
+            <span>次に ${shot} 点で 50 点ちょうど。光っている数字が勝ち筋です。</span>
+          </div>
+          <div class="reach-target">🎯 ${shot} で勝ち</div>
+        </div>
+      `;
+    }
+
+    function scorepadNote(player) {
+      if (isReach(player)) {
+        return `✨ リーチ中。光っている ${winningShot(player)} 点で 50 点ちょうど。超えると 25 点に戻ります。`;
+      }
+      return "1本だけ倒したらその数字。2本以上なら倒れた本数を押してください。";
+    }
+
+    function playerStateText(player) {
+      if (player.retired) return "ゲーム終了";
+      if (isReach(player)) return `${winningShot(player)} で勝ち`;
+      return "プレイ中";
+    }
+
+    function progress(player) {
+      return Math.max(0, Math.min(100, (player.score / 50) * 100));
+    }
+
+    function missDots(player) {
+      return [0, 1, 2].map(i => `<span class="miss-dot ${player.missStreak > i ? "on" : ""}"></span>`).join("");
+    }
+
+    function statusBadge(player, active) {
+      if (player.retired) {
+        return `<span class="badge out">⛔ リタイア</span>`;
+      }
+      const badges = [];
+      if (active) badges.push(`<span class="badge safe">👉 いま投げる人</span>`);
+      if (isReach(player)) {
+        badges.push(`<span class="badge reach">✨ リーチ</span>`);
+        badges.push(`<span class="badge reach">🎯 ${winningShot(player)} で勝ち</span>`);
+      } else if (player.missStreak > 0) {
+        badges.push(`<span class="badge warn">⚠️ ミス ${player.missStreak}/3</span>`);
+      } else {
+        badges.push(`<span class="badge safe">🟢 プレイ中</span>`);
+      }
+      return badges.join("");
+    }
+
+    function renderSetup() {
+      const canStart = state.draftNames.length >= 2;
+      return `
+        <section class="setup-card card">
+          <div class="title-row">
+            <div class="title-wrap">
+              <h1>モルック スコア</h1>
+              <p class="subtitle">スマホでタップ入力。累積ポイント、リーチ強調、連続ミスの赤み表示まで入れた、初心者向けの見やすい版です。</p>
+            </div>
+            <div class="pill">🔰 上から順に投げます</div>
+          </div>
+
+          <div class="draft-list">
+            ${state.draftNames.map((name, index) => `
+              <div class="draft-item">
+                <div class="order-chip">${index + 1}</div>
+                <label class="sr-only" for="player-${index}">プレイヤー ${index + 1}</label>
+                <input id="player-${index}" type="text" inputmode="text" maxlength="18" value="${escapeHtml(name)}" data-index="${index}" data-role="draft-name" placeholder="プレイヤー名 / チーム名">
+                <button type="button" class="mini-btn" data-action="remove-player" data-index="${index}" ${state.draftNames.length <= 2 ? "disabled" : ""} aria-label="プレイヤーを削除">✕</button>
+              </div>
+            `).join("")}
+          </div>
+
+          <div class="setup-actions">
+            <button type="button" class="ghost-btn" data-action="add-player">＋ プレイヤー追加</button>
+            <button type="button" class="primary-btn" data-action="start-game" ${canStart ? "" : "disabled"}>ゲーム開始</button>
+            ${state.players.length ? `<button type="button" class="ghost-btn" data-action="resume-game">保存中のゲームに戻る</button>` : ""}
+            ${state.players.length || state.log.length ? `<button type="button" class="danger-btn" data-action="discard-save">保存データを消す</button>` : ""}
+          </div>
+
+          <div class="tip-grid">
+            <div class="tip">
+              <strong>タップで入力</strong>
+              点数ボタンを押すと、そのまま次の人へ自動で進みます。紙よりだいぶ平和です。
+            </div>
+            <div class="tip">
+              <strong>リーチを強調</strong>
+              38点からカードを光らせて、あと何点かと勝ち筋の数字を大きく表示します。
+            </div>
+            <div class="tip">
+              <strong>ミスは赤く</strong>
+              連続ミス 1 → 2 → 3 でだんだん赤くなり、3回でリタイア表示になります。
+            </div>
+          </div>
+        </section>
+      `;
+    }
+
+    function renderGame() {
+      const player = currentPlayer();
+      if (!player) {
+        return `
+          <section class="panel card">
+            <h2>ゲームを作れませんでした</h2>
+            <p class="subtitle">いったん最初からやり直してください。</p>
+            <div class="action-row">
+              <button type="button" class="primary-btn" data-action="back-setup">セットアップに戻る</button>
+            </div>
+          </section>
+        `;
+      }
+
+      return `
+        <section class="panel card">
+          <div class="game-header">
+            <div class="title-wrap">
+              <h2>ゲーム中</h2>
+              <p class="subtitle">点数をタップすると自動で次の人へ。38点からはリーチ演出で少し盛り上がります。</p>
+            </div>
+            <div class="top-actions">
+              <button type="button" class="ghost-btn" data-action="undo-turn" ${undoStack.length ? "" : "disabled"}>↩︎ 1手もどす</button>
+              <button type="button" class="ghost-btn" data-action="back-setup">メンバー編集</button>
+              <button type="button" class="danger-btn" data-action="reset-game">新しいゲーム</button>
+            </div>
+          </div>
+        </section>
+
+        <section class="game-layout">
+          <div class="game-main">
+            <section class="${heroClass(player)}">
+              <div class="hero-top">
+                <div>
+                  <div class="turn-pill">🎯 いま投げる人</div>
+                  <h2 class="hero-title">${escapeHtml(player.name)}</h2>
+                  <p class="hero-sub">${escapeHtml(heroSubtitle(player))}</p>
+                </div>
+                <div class="badge-row">
+                  ${statusBadge(player, true)}
+                </div>
+              </div>
+
+              <div class="hero-score-row">
+                <div class="hero-score">${player.score}</div>
+                <div class="meta-stack">
+                  <div class="meta-box">
+                    <span class="meta-label">50まで</span>
+                    <span class="meta-value">あと ${remainingToWin(player)} 点</span>
+                  </div>
+                  <div class="meta-box">
+                    <span class="meta-label">連続ミス</span>
+                    <span class="meta-value">${player.missStreak} / 3</span>
+                  </div>
+                </div>
+              </div>
+
+              ${renderReachCallout(player)}
+
+              <div class="progress" aria-hidden="true">
+                <div class="progress-fill" style="width:${progress(player)}%"></div>
+              </div>
+
+              <div class="miss-strip">
+                <span>ミスゲージ</span>
+                <span class="miss-dots">${missDots(player)}</span>
+              </div>
+
+              <div class="message" aria-live="polite">${escapeHtml(state.lastMessage || `${player.name} の番です`)}</div>
+            </section>
+
+            <section class="panel card">
+              <div class="title-row">
+                <div class="title-wrap">
+                  <h3>全員のスコア</h3>
+                  <p class="subtitle">リーチは黄色っぽく、連続ミスは赤っぽく。色だけでなく文字でも状態を出しています。</p>
+                </div>
+                <div class="pill">合計 ${state.players.length} 人</div>
+              </div>
+              <div class="players-grid">
+                ${state.players.map((item, index) => `
+                  <article class="${playerClass(item, index === state.currentIndex)}">
+                    <div class="player-top">
+                      <div class="player-name">${escapeHtml(item.name)}</div>
+                      ${index === state.currentIndex && !item.retired ? `<span class="badge safe">番</span>` : ``}
+                    </div>
+                    <div class="player-score">${item.score}</div>
+                    <div class="player-meta">
+                      <span>あと ${remainingToWin(item)} 点</span>
+                      <span>ミス ${item.missStreak}/3</span>
+                    </div>
+                    <div class="progress" aria-hidden="true">
+                      <div class="progress-fill" style="width:${progress(item)}%"></div>
+                    </div>
+                    <div class="miss-strip">
+                      <span class="miss-dots">${missDots(item)}</span>
+                      <span>${playerStateText(item)}</span>
+                    </div>
+                    <div class="badge-row">
+                      ${statusBadge(item, index === state.currentIndex)}
+                    </div>
+                  </article>
+                `).join("")}
+              </div>
+            </section>
+
+            <section class="panel card">
+              <details>
+                <summary>🔰 初心者メモ</summary>
+                <div class="rule-list">
+                  <div><strong>1本だけ倒したら</strong> → 倒したピンの数字が点数</div>
+                  <div><strong>2本以上倒したら</strong> → 倒れた本数が点数</div>
+                  <div><strong>50点ぴったり</strong> で勝ち。超えたら 25 点に戻ります。</div>
+                  <div><strong>ミス 3 回連続</strong> でリタイアです。</div>
+                </div>
+              </details>
+            </section>
+          </div>
+
+          <aside class="game-side">
+            <section class="scorepad card${isReach(player) ? " reach-mode" : ""}">
+              <div class="scorepad-head">
+                <div>
+                  <h3>${escapeHtml(player.name)} の得点をタップ</h3>
+                  <div class="scorepad-note">${escapeHtml(scorepadNote(player))}</div>
+                </div>
+                <div class="pill">自動で次の人へ</div>
+              </div>
+              <div class="score-grid">
+                ${Array.from({ length: 12 }, (_, index) => index + 1).map(value => `
+                  <button type="button" class="score-btn${winningShot(player) === value ? " finisher" : ""}" data-action="score" data-score="${value}" ${winningShot(player) === value ? 'aria-label="' + value + ' 点 これで勝ち"' : ''}>${value}</button>
+                `).join("")}
+              </div>
+              <button type="button" class="miss-btn" data-action="miss">MISS / 0点</button>
+            </section>
+
+            <section class="panel card">
+              <div class="title-row">
+                <div class="title-wrap">
+                  <h3>履歴</h3>
+                  <p class="subtitle">「あれ今だれ何点だっけ？」対策です。</p>
+                </div>
+                <div class="pill">${state.log.length} 手</div>
+              </div>
+              <div class="history-list">
+                ${state.log.length ? state.log.slice().reverse().slice(0, 8).map(entry => `
+                  <div class="history-item">
+                    <div class="history-main">
+                      <strong>${escapeHtml(entry.name)}</strong>
+                      <span class="muted">${escapeHtml(entry.text)}</span>
+                    </div>
+                    <div class="history-score">${escapeHtml(entry.scoreLabel)}</div>
+                  </div>
+                `).join("") : `<div class="history-item"><div class="history-main"><strong>まだ履歴なし</strong><span class="muted">最初の1投を入れるとここに出ます。</span></div><div class="history-score">-</div></div>`}
+              </div>
+            </section>
+          </aside>
+        </section>
+      `;
+    }
+
+    function renderFinished() {
+      const winner = state.players.find(player => player.id === state.winnerId) || activePlayers()[0] || null;
+      const title = winner ? `${winner.name} の勝ち` : "ゲーム終了";
+      const sub = winner
+        ? `${winner.name} がゲームを制しました。記録はそのまま残っているので、もう1ゲームもすぐいけます。`
+        : "全員がリタイアしたためゲーム終了です。";
+
+      return `
+        <section class="finish card">
+          <div class="winner-mark">🏆</div>
+          <h1 class="winner-name">${escapeHtml(title)}</h1>
+          <p class="finish-text">${escapeHtml(state.lastMessage || sub)}</p>
+          <div class="finish-actions">
+            <button type="button" class="primary-btn" data-action="rematch">同じメンバーでもう1ゲーム</button>
+            <button type="button" class="ghost-btn" data-action="back-setup">メンバーを編集</button>
+            <button type="button" class="danger-btn" data-action="discard-save">保存データを消す</button>
+          </div>
+        </section>
+
+        <section class="panel card">
+          <div class="title-row">
+            <div class="title-wrap">
+              <h2>最終スコア</h2>
+              <p class="subtitle">最後の状態をそのまま見返せます。</p>
+            </div>
+            <div class="top-actions">
+              <button type="button" class="ghost-btn" data-action="undo-turn" ${undoStack.length ? "" : "disabled"}>↩︎ 1手もどす</button>
+            </div>
+          </div>
+          <div class="players-grid">
+            ${state.players.map((item, index) => `
+              <article class="${playerClass(item, index === state.currentIndex)}">
+                <div class="player-top">
+                  <div class="player-name">${escapeHtml(item.name)}</div>
+                  ${item.id === state.winnerId ? `<span class="badge reach">WIN</span>` : ``}
+                </div>
+                <div class="player-score">${item.score}</div>
+                <div class="player-meta">
+                  <span>あと ${remainingToWin(item)} 点</span>
+                  <span>ミス ${item.missStreak}/3</span>
+                </div>
+                <div class="progress" aria-hidden="true">
+                  <div class="progress-fill" style="width:${progress(item)}%"></div>
+                </div>
+                <div class="badge-row">
+                  ${statusBadge(item, false)}
+                  ${item.id === state.winnerId ? `<span class="badge reach">🏆 勝利</span>` : ``}
+                </div>
+              </article>
+            `).join("")}
+          </div>
+        </section>
+
+        <section class="panel card">
+          <details>
+            <summary>履歴を見る</summary>
+            <div class="history-list">
+              ${state.log.length ? state.log.slice().reverse().map(entry => `
+                <div class="history-item">
+                  <div class="history-main">
+                    <strong>${escapeHtml(entry.name)}</strong>
+                    <span class="muted">${escapeHtml(entry.text)}</span>
+                  </div>
+                  <div class="history-score">${escapeHtml(entry.scoreLabel)}</div>
+                </div>
+              `).join("") : `<div class="history-item"><div class="history-main"><strong>履歴なし</strong></div><div class="history-score">-</div></div>`}
+            </div>
+          </details>
+        </section>
+      `;
+    }
+
+    function render() {
+      normalizeState();
+      if (state.phase === "setup") {
+        $app.innerHTML = renderSetup();
+      } else if (state.phase === "game") {
+        $app.innerHTML = renderGame();
+      } else {
+        $app.innerHTML = renderFinished();
+      }
+      saveState();
+    }
+
+    function handleInput(event) {
+      const target = event.target;
+      if (!(target instanceof HTMLElement)) return;
+      if (target.dataset.role === "draft-name") {
+        const index = Number(target.dataset.index);
+        if (Number.isInteger(index) && index >= 0 && index < state.draftNames.length) {
+          state.draftNames[index] = target.value;
+          saveState();
+        }
+      }
+    }
+
+    function handleClick(event) {
+      const button = event.target.closest("[data-action]");
+      if (!button) return;
+      const action = button.dataset.action;
+
+      switch (action) {
+        case "add-player":
+          addPlayer();
+          break;
+        case "remove-player":
+          removePlayer(Number(button.dataset.index));
+          break;
+        case "start-game":
+          startGame();
+          break;
+        case "resume-game":
+          resumeGame();
+          break;
+        case "discard-save":
+          discardSave();
+          break;
+        case "back-setup":
+          goBackToSetup();
+          break;
+        case "score":
+          applyScore(Number(button.dataset.score));
+          break;
+        case "miss":
+          applyMiss();
+          break;
+        case "undo-turn":
+          undoTurn();
+          break;
+        case "reset-game":
+          resetGame();
+          break;
+        case "rematch":
+          rematch();
+          break;
+      }
+    }
+
+    function addPlayer() {
+      if (state.draftNames.length >= 8) return;
+      state.draftNames.push(`プレイヤー ${state.draftNames.length + 1}`);
+      render();
+    }
+
+    function removePlayer(index) {
+      if (state.draftNames.length <= 2) return;
+      if (!Number.isInteger(index) || index < 0 || index >= state.draftNames.length) return;
+      state.draftNames.splice(index, 1);
+      render();
+    }
+
+    function goBackToSetup() {
+      state.phase = "setup";
+      state.lastMessage = state.players.length ? "メンバー編集モードです。並び順はそのまま残しています。" : "名前を入れてゲーム開始";
+      render();
+    }
+
+    function resumeGame() {
+      if (!state.players.length) return;
+      state.phase = state.winnerId || state.players.every(player => player.retired) ? "finished" : "game";
+      render();
+    }
+
+    function startGame() {
+      const names = state.draftNames.map((name, index) => {
+        const trimmed = String(name || "").trim();
+        return trimmed || `プレイヤー ${index + 1}`;
+      });
+
+      if (names.length < 2) return;
+
+      state.players = names.map((name, index) => ({
+        id: `p-${Date.now()}-${index}-${Math.random().toString(36).slice(2, 8)}`,
+        name,
+        score: 0,
+        missStreak: 0,
+        retired: false
+      }));
+      state.currentIndex = 0;
+      state.phase = "game";
+      state.log = [];
+      state.winnerId = null;
+      state.lastMessage = `${names[0]} からスタート`;
+      undoStack = [];
+      pulse();
+      render();
+    }
+
+    function rematch() {
+      if (!state.players.length) return;
+      state.draftNames = state.players.map(player => player.name);
+      startGame();
+    }
+
+    function resetGame() {
+      if (!confirm("今のゲームをやめて、新しく始めますか？")) return;
+      state.draftNames = state.players.length ? state.players.map(player => player.name) : state.draftNames;
+      state.phase = "setup";
+      state.players = [];
+      state.currentIndex = 0;
+      state.log = [];
+      state.winnerId = null;
+      state.lastMessage = "新しいゲームの準備ができました";
+      undoStack = [];
+      render();
+    }
+
+    function discardSave() {
+      if (!confirm("保存中のデータを消します。よろしいですか？")) return;
+      state = makeFreshState();
+      undoStack = [];
+      clearState();
+      render();
+    }
+
+    function snapshot() {
+      undoStack.push(JSON.stringify(state));
+      if (undoStack.length > MAX_UNDO) undoStack.shift();
+    }
+
+    function undoTurn() {
+      if (!undoStack.length) return;
+      const previous = undoStack.pop();
+      try {
+        state = JSON.parse(previous);
+        state.lastMessage = "1手もどしました";
+        pulse(12);
+        render();
+      } catch (error) {
+        console.warn("undo failed", error);
+      }
+    }
+
+    function applyScore(score) {
+      if (state.phase !== "game") return;
+      if (!Number.isFinite(score) || score < 1 || score > 12) return;
+      const player = currentPlayer();
+      if (!player || player.retired) return;
+
+      snapshot();
+      player.missStreak = 0;
+      const before = player.score;
+      player.score += score;
+      let vibration = 22;
+
+      let text = `+${score} 点`;
+      let scoreLabel = `${before} → ${player.score}`;
+
+      if (player.score === 50) {
+        state.winnerId = player.id;
+        state.phase = "finished";
+        state.lastMessage = `${player.name} が 50 点ちょうどで勝ち！`;
+        text = `+${score} 点で 50 点ちょうど`;
+        scoreLabel = `${before} → 50`;
+        vibration = 60;
+      } else if (player.score > 50) {
+        player.score = 25;
+        state.lastMessage = `${player.name} は 50 オーバー。25 点に戻る！`;
+        text = `+${score} 点で 50 オーバー → 25 点へ`;
+        scoreLabel = `${before} → 25`;
+        vibration = 30;
+      } else if (isReach(player)) {
+        const shot = winningShot(player);
+        const enteredReach = before < 38;
+        state.lastMessage = enteredReach
+          ? `${player.name} はリーチ！ 次に ${shot} 点で勝ち`
+          : `${player.name} はリーチ中。次に ${shot} 点で勝ち`;
+        text = enteredReach ? `+${score} 点でリーチ突入` : `+${score} 点でリーチキープ`;
+        scoreLabel = `${before} → ${player.score}`;
+        vibration = enteredReach ? 48 : 34;
+      } else {
+        state.lastMessage = `${player.name} に ${score} 点`;
+      }
+
+      state.log.push({
+        name: player.name,
+        text,
+        scoreLabel
+      });
+
+      if (state.phase !== "finished") {
+        resolveRetirementWin();
+      }
+
+      if (state.phase === "game") {
+        advanceTurn();
+      }
+
+      pulse(vibration);
+      render();
+    }
+
+    function applyMiss() {
+      if (state.phase !== "game") return;
+      const player = currentPlayer();
+      if (!player || player.retired) return;
+
+      snapshot();
+      const before = player.score;
+      player.missStreak = Math.min(3, player.missStreak + 1);
+
+      let text = `MISS ${player.missStreak}/3`;
+      let scoreLabel = `${before} → ${player.score}`;
+
+      if (player.missStreak >= 3) {
+        player.retired = true;
+        state.lastMessage = `${player.name} は 3 連続ミスでリタイア`;
+        text = `3 連続ミスでリタイア`;
+      } else {
+        state.lastMessage = `${player.name} はミス ${player.missStreak}/3`;
+      }
+
+      state.log.push({
+        name: player.name,
+        text,
+        scoreLabel
+      });
+
+      resolveRetirementWin();
+
+      if (state.phase === "game") {
+        advanceTurn();
+      }
+
+      pulse(18);
+      render();
+    }
+
+    function resolveRetirementWin() {
+      const alive = activePlayers();
+      if (!alive.length) {
+        state.phase = "finished";
+        state.winnerId = null;
+        state.lastMessage = "全員リタイアでゲーム終了";
+        return;
+      }
+      if (!state.winnerId && alive.length === 1 && state.players.length > 1) {
+        state.phase = "finished";
+        state.winnerId = alive[0].id;
+        state.lastMessage = `${alive[0].name} が最後まで残って勝ち！`;
+      }
+    }
+
+    function advanceTurn() {
+      const nextIndex = findNextActiveIndex(state.currentIndex);
+      state.currentIndex = nextIndex >= 0 ? nextIndex : state.currentIndex;
+    }
+
+    function findNextActiveIndex(fromIndex) {
+      if (!state.players.length) return -1;
+      for (let step = 1; step <= state.players.length; step += 1) {
+        const next = (fromIndex + step + state.players.length) % state.players.length;
+        if (!state.players[next].retired) {
+          return next;
+        }
+      }
+      return -1;
+    }
+
+    function pulse(duration = 22) {
+      if (navigator.vibrate) {
+        navigator.vibrate(duration);
+      }
+    }
+  </script>
+</body>
 </html>
