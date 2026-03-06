@@ -1,27 +1,17 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { QRCodeSVG } from "qrcode.react";
 import { fetchSnapshot, wsUrl } from "../api";
-import type { ActionInput, Player, RoomState } from "../types";
+import type { ActionInput, HistoryEntry, Player, RoomState } from "../types";
 
 const NAME_KEY = "molkky:display-name";
-const TARGET_SCORE = 50;
-const MIDPOINT_SCORE = 25;
-const REACH_SCORE = 38;
-const OUT_MISS_COUNT = 3;
+
+type ConnectionState = "connecting" | "open" | "reconnecting" | "closed";
+type ScoreMode = "single" | "multi";
 
 interface ServerMessage {
   type: "state" | "error" | "info";
   fullState?: RoomState;
   message?: string;
-}
-
-type MobileTab = "input" | "board";
-type BadgeTone = "neutral" | "mid" | "reach" | "danger" | "win";
-
-interface PlayerBadge {
-  tone: BadgeTone;
-  label: string;
 }
 
 function parseEditToken(hash: string): string | null {
@@ -32,33 +22,62 @@ function parseEditToken(hash: string): string | null {
   return params.get("edit");
 }
 
-function getRemaining(score: number): number {
-  return Math.max(0, TARGET_SCORE - score);
+function isReach(player: Player): boolean {
+  return !player.eliminated && player.score >= 38 && player.score < 50;
 }
 
-function getPlayerBadges(player: Player, winnerPlayerId: string | null): PlayerBadge[] {
-  if (player.id === winnerPlayerId) {
-    return [{ tone: "win", label: "WIN" }];
-  }
+function remainingToWin(player: Player): number {
+  return Math.max(0, 50 - player.score);
+}
 
-  if (player.eliminated || player.missStreak >= OUT_MISS_COUNT) {
-    return [{ tone: "danger", label: "OUT" }];
-  }
+function winningShot(player: Player): number | null {
+  return isReach(player) ? remainingToWin(player) : null;
+}
 
-  const badges: PlayerBadge[] = [];
-  if (player.score >= MIDPOINT_SCORE) {
-    badges.push({ tone: "mid", label: "25+ 中間" });
+function progress(player: Player): number {
+  return Math.max(0, Math.min(100, (player.score / 50) * 100));
+}
+
+function actionLabel(entry: HistoryEntry): string {
+  if (entry.input.type === "single") {
+    return `single ${entry.input.value}`;
   }
-  if (player.score >= REACH_SCORE && player.score < TARGET_SCORE) {
-    badges.push({ tone: "reach", label: "REACH" });
+  if (entry.input.type === "multi") {
+    return `multi ${entry.input.value}`;
   }
-  if (player.missStreak === OUT_MISS_COUNT - 1) {
-    badges.push({ tone: "danger", label: "MISS あと1" });
+  if (entry.input.type === "foul") {
+    return "foul";
   }
-  if (badges.length === 0) {
-    badges.push({ tone: "neutral", label: "通常" });
+  return "miss";
+}
+
+function historyText(entry: HistoryEntry): string {
+  const overshoot = entry.delta > 0 && entry.prevScore + entry.delta > 50 && entry.nextScore === 25;
+  if (entry.nextScore === 50) {
+    return `${actionLabel(entry)} で 50 点`;
   }
-  return badges;
+  if (overshoot) {
+    return `${actionLabel(entry)} で 50 超過 → 25 点`;
+  }
+  if (entry.input.type === "miss" || entry.input.type === "foul") {
+    return `${actionLabel(entry)} (${entry.nextMissStreak}/3)`;
+  }
+  return `${actionLabel(entry)} (${entry.prevScore} → ${entry.nextScore})`;
+}
+
+function connectionLabel(connection: ConnectionState): string {
+  if (connection === "open") return "同期しました";
+  if (connection === "reconnecting") return "再接続しています";
+  if (connection === "closed") return "切断されています";
+  return "接続中";
+}
+
+function classByPlayerState(player: Player, active: boolean): string {
+  const classes = ["player-card", `miss-${Math.min(player.missStreak, 3)}`];
+  if (active) classes.push("active");
+  if (isReach(player)) classes.push("reach");
+  if (player.eliminated) classes.push("retired");
+  return classes.join(" ");
 }
 
 export function RoomPage() {
@@ -69,11 +88,17 @@ export function RoomPage() {
   const [error, setError] = useState("");
   const [info, setInfo] = useState("");
   const [name, setName] = useState(() => localStorage.getItem(NAME_KEY) ?? "Guest");
-  const [mobileTab, setMobileTab] = useState<MobileTab>("input");
+  const [connection, setConnection] = useState<ConnectionState>("connecting");
+  const [scoreMode, setScoreMode] = useState<ScoreMode>("single");
 
   const socketRef = useRef<WebSocket | null>(null);
-
+  const reconnectTimerRef = useRef<number | null>(null);
+  const latestNameRef = useRef(name);
   const token = useMemo(() => parseEditToken(window.location.hash), []);
+
+  useEffect(() => {
+    latestNameRef.current = name;
+  }, [name]);
 
   useEffect(() => {
     if (!roomId) {
@@ -82,6 +107,70 @@ export function RoomPage() {
     }
 
     let active = true;
+
+    const clearReconnectTimer = (): void => {
+      if (reconnectTimerRef.current !== null) {
+        window.clearTimeout(reconnectTimerRef.current);
+        reconnectTimerRef.current = null;
+      }
+    };
+
+    const endpoint = new URL(wsUrl(`/api/room/${encodeURIComponent(roomId)}/ws`));
+    if (token) {
+      endpoint.searchParams.set("token", token);
+    }
+
+    const connect = (): void => {
+      if (!active) return;
+      setConnection((prev) => (prev === "open" ? "reconnecting" : "connecting"));
+
+      const socket = new WebSocket(endpoint);
+      socketRef.current = socket;
+
+      socket.addEventListener("open", () => {
+        if (!active) return;
+        setConnection("open");
+        setError("");
+        const joinName = latestNameRef.current.trim() || "Guest";
+        socket.send(JSON.stringify({ type: "join", name: joinName }));
+      });
+
+      socket.addEventListener("message", (event) => {
+        let message: ServerMessage;
+        try {
+          message = JSON.parse(String(event.data)) as ServerMessage;
+        } catch {
+          setError("不正なサーバーメッセージ");
+          return;
+        }
+
+        if (message.type === "state" && message.fullState) {
+          setState(message.fullState);
+          return;
+        }
+
+        if (message.type === "error" && message.message) {
+          setError(message.message);
+          return;
+        }
+
+        if (message.type === "info" && message.message) {
+          setInfo(message.message);
+        }
+      });
+
+      socket.addEventListener("close", () => {
+        if (!active) return;
+        setConnection("reconnecting");
+        clearReconnectTimer();
+        reconnectTimerRef.current = window.setTimeout(connect, 1500);
+      });
+
+      socket.addEventListener("error", () => {
+        if (!active) return;
+        setError("WebSocket error");
+      });
+    };
 
     void (async () => {
       try {
@@ -94,49 +183,13 @@ export function RoomPage() {
       }
     })();
 
-    const endpoint = new URL(wsUrl(`/api/room/${encodeURIComponent(roomId)}/ws`));
-    if (token) {
-      endpoint.searchParams.set("token", token);
-    }
-
-    const socket = new WebSocket(endpoint);
-    socketRef.current = socket;
-
-    socket.addEventListener("open", () => {
-      socket.send(JSON.stringify({ type: "join", name }));
-    });
-
-    socket.addEventListener("message", (event) => {
-      let message: ServerMessage;
-      try {
-        message = JSON.parse(String(event.data)) as ServerMessage;
-      } catch {
-        setError("不正なサーバーメッセージ");
-        return;
-      }
-
-      if (message.type === "state" && message.fullState) {
-        setState(message.fullState);
-      } else if (message.type === "error" && message.message) {
-        setError(message.message);
-      } else if (message.type === "info" && message.message) {
-        setInfo(message.message);
-      }
-    });
-
-    socket.addEventListener("close", () => {
-      if (active) {
-        setInfo("WebSocket closed");
-      }
-    });
-
-    socket.addEventListener("error", () => {
-      setError("WebSocket error");
-    });
+    connect();
 
     return () => {
       active = false;
-      socket.close();
+      clearReconnectTimer();
+      setConnection("closed");
+      socketRef.current?.close();
       socketRef.current = null;
     };
   }, [navigate, roomId, token]);
@@ -163,248 +216,328 @@ export function RoomPage() {
     const next = name.trim() || "Guest";
     localStorage.setItem(NAME_KEY, next);
     setName(next);
+
     const socket = socketRef.current;
     if (socket && socket.readyState === WebSocket.OPEN) {
       socket.send(JSON.stringify({ type: "join", name: next }));
     }
   };
 
-  const canEdit = state?.session.canEdit ?? false;
-  const currentPlayer = state?.players.find((p) => p.id === state.turn.playerId) ?? null;
-  const winner = state?.players.find((p) => p.id === state.winnerPlayerId) ?? null;
-  const winnerPlayerId = state?.winnerPlayerId ?? null;
-  const currentMiss = currentPlayer?.missStreak ?? 0;
-  const isFinished = state?.status === "finished";
-  const canOperate = canEdit && !isFinished;
-  const columnsClassName = `room-columns ${mobileTab === "input" ? "show-input" : "show-board"}`;
-
   if (!roomId) {
     return null;
   }
+
+  const players = state?.players ?? [];
+  const canEdit = state?.session.canEdit ?? false;
+  const currentPlayer = players.find((player) => player.id === state?.turn.playerId) ?? null;
+  const winner = players.find((player) => player.id === state?.winnerPlayerId) ?? null;
+  const lastEntry = state?.history.length ? state.history[state.history.length - 1] : null;
+
+  const lastMessage = (() => {
+    if (state?.status === "finished" && winner) {
+      return `${winner.name} が勝利しました`;
+    }
+    if (lastEntry) {
+      const actor = players.find((player) => player.id === lastEntry.playerId);
+      return actor ? `${actor.name}: ${historyText(lastEntry)}` : historyText(lastEntry);
+    }
+    if (currentPlayer) {
+      return `${currentPlayer.name} さんの番です`;
+    }
+    return "参加待ち";
+  })();
 
   const encodedRoomId = encodeURIComponent(roomId);
   const viewUrl = `${window.location.origin}/room/${encodedRoomId}`;
   const editUrl = token ? `${window.location.origin}/room/${encodedRoomId}#edit=${token}` : "（編集トークンなし）";
 
+  const scoreValues = scoreMode === "single" ? Array.from({ length: 12 }, (_, idx) => idx + 1) : Array.from({ length: 11 }, (_, idx) => idx + 2);
+  const currentWinningShot = currentPlayer ? winningShot(currentPlayer) : null;
+  const canInput =
+    canEdit &&
+    connection === "open" &&
+    state?.status === "ongoing" &&
+    Boolean(currentPlayer) &&
+    !currentPlayer?.eliminated;
+
   return (
-    <main className="container">
-      <section className="panel game-panel">
-        <header className="room-header">
-          <div>
-            <h1>Room: {roomId}</h1>
-            <p className="muted">25点で中間地点 / 38点からリーチ / miss・foul 3回でOUT</p>
+    <main className="app">
+      <div className="shell">
+        <section className="panel card">
+          <div className="game-header">
+            <div className="title-wrap">
+              <h1>Room: {roomId}</h1>
+              <p className="subtitle">モルックの試合をリアルタイム同期しています。</p>
+            </div>
+            <div className="top-actions">
+              <span className={`pill connection ${connection}`}>
+                <span className="status-dot" aria-hidden="true" />
+                {connectionLabel(connection)}
+              </span>
+              <button type="button" className="ghost-btn" onClick={sendUndo} disabled={!canInput || !state?.history.length}>
+                取り消す
+              </button>
+            </div>
           </div>
-          <p className="room-meta">Round: {state?.turn.round ?? "-"}</p>
-        </header>
 
-        <div className="inline-fields">
-          <input type="text" value={name} onChange={(event) => setName(event.currentTarget.value)} />
-          <button type="button" onClick={onNameSave}>
-            名前を更新
-          </button>
-        </div>
-
-        <div className="status-box">
-          <strong>手番:</strong> {currentPlayer ? currentPlayer.name : "未設定"}
-          {state?.status === "finished" && winner && <p className="winner">勝者: {winner.name}</p>}
-        </div>
-
-        <div className="share-links">
-          <p>
-            <strong>閲覧URL:</strong> <code>{viewUrl}</code>
-          </p>
-          <p>
-            <strong>編集URL:</strong> <code>{editUrl}</code>
-          </p>
-          <div className="qr-grid">
-            <figure className="qr-card">
-              <figcaption>閲覧QR（仲間向け）</figcaption>
-              <QRCodeSVG value={viewUrl} size={168} level="M" includeMargin />
-              <small className="muted">読み取るとこのルームを開きます。</small>
-            </figure>
-            {token && (
-              <figure className="qr-card">
-                <figcaption>編集QR（スコア入力あり）</figcaption>
-                <QRCodeSVG value={editUrl} size={168} level="M" includeMargin />
-                <small className="warning-text">編集QRは運営メンバーのみに共有してください。</small>
-              </figure>
-            )}
+          <div className="identity-row">
+            <input type="text" value={name} onChange={(event) => setName(event.currentTarget.value)} maxLength={24} />
+            <button type="button" className="mini-btn" onClick={onNameSave}>
+              名前を更新
+            </button>
           </div>
-        </div>
 
-        <div className="mobile-tabs" role="tablist" aria-label="表示切替">
-          <button
-            type="button"
-            role="tab"
-            aria-selected={mobileTab === "input"}
-            className={`tab-button ${mobileTab === "input" ? "tab-active" : ""}`}
-            onClick={() => setMobileTab("input")}
-          >
-            入力
-          </button>
-          <button
-            type="button"
-            role="tab"
-            aria-selected={mobileTab === "board"}
-            className={`tab-button ${mobileTab === "board" ? "tab-active" : ""}`}
-            onClick={() => setMobileTab("board")}
-          >
-            スコアボード
-          </button>
-        </div>
+          <div className="share-list">
+            <p>
+              <strong>閲覧URL:</strong> <code>{viewUrl}</code>
+            </p>
+            <p>
+              <strong>編集URL:</strong> <code>{editUrl}</code>
+            </p>
+          </div>
+        </section>
 
-        <div className={columnsClassName}>
-          <section className="column-panel input-column">
-            <h2>入力パネル</h2>
+        {!state && (
+          <section className="panel card">
+            <p className="subtitle">試合状態を読み込み中です...</p>
+          </section>
+        )}
 
-            <article className="player-focus">
-              <p className="muted">現在の手番</p>
-              <h3>{currentPlayer ? currentPlayer.name : "未設定"}</h3>
+        {state && players.length === 0 && (
+          <section className="setup-card card">
+            <div className="title-row">
+              <div className="title-wrap">
+                <h2>参加待ち</h2>
+                <p className="subtitle">参加者が接続するとレーンが表示されます。</p>
+              </div>
+              <span className="pill">ルーム共有中</span>
+            </div>
+          </section>
+        )}
 
-              {currentPlayer ? (
-                <>
-                  <div className="focus-stats">
-                    <div className="stat-card">
-                      <p className="stat-label">今の点数</p>
-                      <p className="stat-value">{currentPlayer.score}</p>
+        {state && players.length > 0 && (
+          <section className="game-layout">
+            <div className="game-main">
+              {currentPlayer && (
+                <section className={`hero card ${isReach(currentPlayer) ? "reach" : ""} miss-${Math.min(currentPlayer.missStreak, 3)} ${currentPlayer.eliminated ? "retired" : ""}`}>
+                  <div className="hero-top">
+                    <div>
+                      <div className="turn-pill">いま投げる人</div>
+                      <h2 className="hero-title">{currentPlayer.name}</h2>
+                      <p className="hero-sub">{isReach(currentPlayer) ? `リーチ中。次に ${currentWinningShot} 点で勝利です。` : "50 点ちょうどを目指します。"}</p>
                     </div>
-                    <div className="stat-card">
-                      <p className="stat-label">残り点</p>
-                      <p className="stat-value">{getRemaining(currentPlayer.score)}</p>
+                    <div className="badge-row">
+                      {isReach(currentPlayer) && <span className="badge reach">リーチ</span>}
+                      {currentPlayer.missStreak > 0 && <span className="badge warn">miss {currentPlayer.missStreak}/3</span>}
+                      {currentPlayer.eliminated && <span className="badge out">失格</span>}
                     </div>
-                    <div className={`stat-card ${currentMiss >= OUT_MISS_COUNT - 1 ? "risk" : ""}`}>
-                      <p className="stat-label">失敗</p>
-                      <p className="stat-value">
-                        {currentMiss}/{OUT_MISS_COUNT}
-                      </p>
-                      <div className="miss-track" aria-label="失敗カウント">
-                        {Array.from({ length: OUT_MISS_COUNT }, (_, idx) => (
-                          <span key={`miss-${idx}`} className={`miss-dot ${idx < currentMiss ? "on" : ""}`} />
-                        ))}
+                  </div>
+
+                  <div className="hero-score-row">
+                    <div className="hero-score">{currentPlayer.score}</div>
+                    <div className="meta-stack">
+                      <div className="meta-box">
+                        <span className="meta-label">50まで</span>
+                        <span className="meta-value">あと {remainingToWin(currentPlayer)} 点</span>
+                      </div>
+                      <div className="meta-box">
+                        <span className="meta-label">ラウンド</span>
+                        <span className="meta-value">{state.turn.round}</span>
                       </div>
                     </div>
                   </div>
 
-                  <div className="badge-list">
-                    {getPlayerBadges(currentPlayer, winnerPlayerId).map((badge) => (
-                      <span
-                        key={`focus-${currentPlayer.id}-${badge.label}`}
-                        className={`status-badge status-${badge.tone}`}
-                      >
-                        {badge.label}
-                      </span>
-                    ))}
+                  {isReach(currentPlayer) && (
+                    <div className="reach-callout" aria-live="polite">
+                      <div className="reach-copy">
+                        <div className="reach-label">勝負どころ</div>
+                        <span>次に {currentWinningShot} 点で 50 点ちょうど。超えると 25 点に戻ります。</span>
+                      </div>
+                      <div className="reach-target">{currentWinningShot} で勝ち</div>
+                    </div>
+                  )}
+
+                  <div className="progress" aria-hidden="true">
+                    <div className="progress-fill" style={{ width: `${progress(currentPlayer)}%` }} />
                   </div>
-                </>
-              ) : (
-                <p className="muted">プレイヤー待機中です。</p>
+
+                  <div className="miss-strip">
+                    <span>連続 miss</span>
+                    <span className="miss-dots" aria-label={`連続 miss ${currentPlayer.missStreak} 回`}>
+                      {Array.from({ length: 3 }, (_, idx) => (
+                        <span key={idx} className={`miss-dot ${currentPlayer.missStreak > idx ? "on" : ""}`} />
+                      ))}
+                    </span>
+                  </div>
+
+                  <div className="message" aria-live="polite">
+                    {lastMessage}
+                  </div>
+                </section>
               )}
-            </article>
 
-            {!canEdit && <p className="muted">編集トークンがないため閲覧専用モードです。</p>}
+              <section className="panel card">
+                <div className="title-row">
+                  <div className="title-wrap">
+                    <h3>スコアボード</h3>
+                    <p className="subtitle">点数の大きさと進捗バーで、50までの距離を一目で把握できます。</p>
+                  </div>
+                  <span className="pill">{players.length} 人</span>
+                </div>
 
-            <div className="button-grid">
-              {Array.from({ length: 12 }, (_, idx) => idx + 1).map((value) => (
-                <button
-                  key={`single-${value}`}
-                  type="button"
-                  onClick={() => sendAction({ type: "single", value })}
-                  disabled={!canOperate}
-                >
-                  single {value}
-                </button>
-              ))}
-            </div>
-
-            <div className="button-grid">
-              {Array.from({ length: 11 }, (_, idx) => idx + 2).map((value) => (
-                <button
-                  key={`multi-${value}`}
-                  type="button"
-                  onClick={() => sendAction({ type: "multi", value })}
-                  disabled={!canOperate}
-                >
-                  multi {value}
-                </button>
-              ))}
-            </div>
-
-            <div className="actions-row">
-              <button type="button" onClick={() => sendAction({ type: "miss" })} disabled={!canOperate}>
-                miss
-              </button>
-              <button type="button" onClick={() => sendAction({ type: "foul" })} disabled={!canOperate}>
-                foul
-              </button>
-              <button type="button" onClick={sendUndo} disabled={!canOperate}>
-                undo
-              </button>
-            </div>
-          </section>
-
-          <section className="column-panel board-column">
-            <h2>スコアボード</h2>
-            <div className="legend-row">
-              <span className="status-badge status-mid">25+ 中間</span>
-              <span className="status-badge status-reach">REACH (38-49)</span>
-              <span className="status-badge status-danger">MISS 3でOUT</span>
-            </div>
-
-            <div className="table-wrap">
-              <table className="score-table">
-                <thead>
-                  <tr>
-                    <th>順番</th>
-                    <th>名前</th>
-                    <th>得点</th>
-                    <th>残り</th>
-                    <th>失敗</th>
-                    <th>状態</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {state?.players.map((player) => {
-                    const rowClasses = [
-                      player.id === currentPlayer?.id ? "active-row" : "",
-                      player.id === winnerPlayerId ? "winner-row" : "",
-                      player.eliminated ? "eliminated-row" : ""
-                    ]
-                      .filter(Boolean)
-                      .join(" ");
+                <div className="players-grid">
+                  {players.map((player) => {
+                    const active = player.id === state.turn.playerId;
+                    const reach = winningShot(player);
 
                     return (
-                      <tr key={player.id} className={rowClasses}>
-                        <td>{player.order + 1}</td>
-                        <td>{player.name}</td>
-                        <td>{player.score}</td>
-                        <td>{getRemaining(player.score)}</td>
-                        <td>
-                          {player.missStreak}/{OUT_MISS_COUNT}
-                        </td>
-                        <td>
-                          <div className="badge-list">
-                            {getPlayerBadges(player, winnerPlayerId).map((badge) => (
-                              <span
-                                key={`board-${player.id}-${badge.label}`}
-                                className={`status-badge status-${badge.tone}`}
-                              >
-                                {badge.label}
-                              </span>
+                      <article key={player.id} className={classByPlayerState(player, active)}>
+                        <div className="player-top">
+                          <div className="player-name">{player.name}</div>
+                          {active && !player.eliminated && <span className="badge safe">番</span>}
+                        </div>
+                        <div className="player-score">{player.score}</div>
+                        <div className="player-meta">
+                          <span>あと {remainingToWin(player)} 点</span>
+                          <span>miss {player.missStreak}/3</span>
+                        </div>
+                        <div className="progress" aria-hidden="true">
+                          <div className="progress-fill" style={{ width: `${progress(player)}%` }} />
+                        </div>
+                        <div className="miss-strip">
+                          <span className="miss-dots" aria-hidden="true">
+                            {Array.from({ length: 3 }, (_, idx) => (
+                              <span key={idx} className={`miss-dot ${player.missStreak > idx ? "on" : ""}`} />
                             ))}
-                          </div>
-                        </td>
-                      </tr>
+                          </span>
+                          <span>
+                            {player.eliminated ? "失格" : isReach(player) ? `${reach} で勝ち` : "プレイ中"}
+                          </span>
+                        </div>
+                      </article>
                     );
                   })}
-                </tbody>
-              </table>
+                </div>
+              </section>
             </div>
+
+            <aside className="game-side">
+              <section className={`scorepad card ${currentPlayer && isReach(currentPlayer) ? "reach-mode" : ""}`}>
+                <div className="scorepad-head">
+                  <div>
+                    <h3>{currentPlayer ? `${currentPlayer.name} の得点入力` : "得点入力"}</h3>
+                    <div className="scorepad-note">
+                      {currentPlayer && isReach(currentPlayer)
+                        ? `${currentWinningShot} 点で勝ち。50 を超えると 25 点へ戻ります。`
+                        : "1本だけ倒したら single、2本以上は multi を選んで入力します。"}
+                    </div>
+                  </div>
+                  <span className="pill">{canEdit ? "編集可能" : "閲覧専用"}</span>
+                </div>
+
+                <div className="mode-switch" role="tablist" aria-label="score mode">
+                  <button
+                    type="button"
+                    className={`mode-btn ${scoreMode === "single" ? "active" : ""}`}
+                    onClick={() => setScoreMode("single")}
+                    disabled={!canInput}
+                  >
+                    single
+                  </button>
+                  <button
+                    type="button"
+                    className={`mode-btn ${scoreMode === "multi" ? "active" : ""}`}
+                    onClick={() => setScoreMode("multi")}
+                    disabled={!canInput}
+                  >
+                    multi
+                  </button>
+                </div>
+
+                <div className="score-grid">
+                  {scoreValues.map((value) => {
+                    const isFinisher = currentWinningShot === value;
+                    return (
+                      <button
+                        key={`${scoreMode}-${value}`}
+                        type="button"
+                        className={`score-btn ${isFinisher ? "finisher" : ""}`}
+                        onClick={() => sendAction({ type: scoreMode, value })}
+                        disabled={!canInput}
+                      >
+                        {value}
+                      </button>
+                    );
+                  })}
+                </div>
+
+                <div className="action-row compact">
+                  <button type="button" className="miss-btn" onClick={() => sendAction({ type: "miss" })} disabled={!canInput}>
+                    miss
+                  </button>
+                  <button type="button" className="miss-btn foul" onClick={() => sendAction({ type: "foul" })} disabled={!canInput}>
+                    foul
+                  </button>
+                </div>
+
+                {!canEdit && <p className="readonly-note">編集トークンがないため閲覧専用です。</p>}
+              </section>
+
+              <section className="panel card">
+                <div className="title-row">
+                  <div className="title-wrap">
+                    <h3>履歴</h3>
+                    <p className="subtitle">最新 8 手を表示しています。</p>
+                  </div>
+                  <span className="pill">{state.history.length} 手</span>
+                </div>
+
+                <div className="history-list">
+                  {state.history.length === 0 && (
+                    <div className="history-item">
+                      <div className="history-main">
+                        <strong>まだ履歴はありません</strong>
+                        <span className="muted">最初の入力がここに表示されます。</span>
+                      </div>
+                      <div className="history-score">-</div>
+                    </div>
+                  )}
+
+                  {state.history
+                    .slice()
+                    .reverse()
+                    .slice(0, 8)
+                    .map((entry) => {
+                      const actor = players.find((player) => player.id === entry.playerId);
+                      return (
+                        <div className="history-item" key={entry.id}>
+                          <div className="history-main">
+                            <strong>{actor?.name ?? "unknown"}</strong>
+                            <span className="muted">{historyText(entry)}</span>
+                          </div>
+                          <div className="history-score">
+                            {entry.prevScore} → {entry.nextScore}
+                          </div>
+                        </div>
+                      );
+                    })}
+                </div>
+              </section>
+            </aside>
           </section>
-        </div>
+        )}
+
+        {state?.status === "finished" && (
+          <section className="finish card">
+            <div className="winner-mark">🏆</div>
+            <h2 className="winner-name">{winner ? `${winner.name} の勝利` : "試合終了"}</h2>
+            <p className="finish-text">最終スコアを確認して、同じルームで次の試合を始めてください。</p>
+          </section>
+        )}
 
         {info && <p className="info-text">{info}</p>}
         {error && <p className="error-text">{error}</p>}
-      </section>
+      </div>
     </main>
   );
 }

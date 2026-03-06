@@ -11,12 +11,10 @@ function readSavedName(): string {
 export function HomePage() {
   const navigate = useNavigate();
   const [name, setName] = useState<string>(() => readSavedName());
-  const [gameName, setGameName] = useState("");
   const [roomId, setRoomId] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
-  const normalizedGameName = useMemo(() => gameName.trim(), [gameName]);
   const normalizedRoomId = useMemo(() => roomId.trim(), [roomId]);
 
   const persistName = (): string => {
@@ -33,7 +31,7 @@ export function HomePage() {
     setError("");
     try {
       const finalName = persistName();
-      const created = await createRoom({ roomId: normalizedGameName || undefined });
+      const created = await createRoom();
       navigate(`/room/${encodeURIComponent(created.roomId)}#edit=${created.editToken}`, {
         state: { name: finalName }
       });
@@ -44,64 +42,85 @@ export function HomePage() {
     }
   };
 
-  const onJoin = (e: FormEvent): void => {
-    e.preventDefault();
+  const onJoin = (event: FormEvent): void => {
+    event.preventDefault();
     setError("");
+
     if (!normalizedRoomId) {
       setError("roomId を入力してください");
       return;
     }
+
     persistName();
     navigate(`/room/${encodeURIComponent(normalizedRoomId)}`);
   };
 
   return (
-    <main className="container">
-      <section className="panel">
-        <h1>Molkky Score Sync</h1>
-        <p className="muted">リアルタイムでスコアと手番を同期</p>
+    <main className="app">
+      <div className="shell">
+        <section className="setup-card card">
+          <div className="title-row">
+            <div className="title-wrap">
+              <h1>Molkky Score Sync</h1>
+              <p className="subtitle">モルックのスコアを、試合の流れを崩さずリアルタイム同期。</p>
+            </div>
+            <span className="pill">観戦URL / 編集URL を分離</span>
+          </div>
 
-        <label className="field">
-          <span>表示名</span>
-          <input
-            type="text"
-            value={name}
-            onChange={(event) => setName(event.currentTarget.value)}
-            placeholder="例: Taro"
-          />
-        </label>
+          <div className="draft-list compact">
+            <label className="field-block" htmlFor="display-name">
+              <span>表示名</span>
+              <input
+                id="display-name"
+                type="text"
+                value={name}
+                onChange={(event) => setName(event.currentTarget.value)}
+                placeholder="例: Taro"
+                maxLength={24}
+              />
+            </label>
+          </div>
 
-        <label className="field">
-          <span>ゲーム名（任意）</span>
-          <input
-            type="text"
-            value={gameName}
-            onChange={(event) => setGameName(event.currentTarget.value)}
-            placeholder="空欄なら自動生成"
-          />
-        </label>
+          <div className="setup-actions">
+            <button type="button" className="primary-btn" onClick={() => void onCreate()} disabled={loading}>
+              {loading ? "作成中..." : "ルームをつくる"}
+            </button>
+          </div>
 
-        <div className="actions-row">
-          <button type="button" onClick={() => void onCreate()} disabled={loading}>
-            {loading ? "作成中..." : "新規ルーム作成"}
-          </button>
-        </div>
+          <form onSubmit={onJoin} className="join-form">
+            <label className="field-block" htmlFor="room-id">
+              <span>ルームID</span>
+              <input
+                id="room-id"
+                type="text"
+                value={roomId}
+                onChange={(event) => setRoomId(event.currentTarget.value)}
+                placeholder="roomId"
+              />
+            </label>
+            <button type="submit" className="ghost-btn">
+              ルームに入る
+            </button>
+          </form>
 
-        <form onSubmit={onJoin} className="join-form">
-          <label className="field">
-            <span>参加する roomId</span>
-            <input
-              type="text"
-              value={roomId}
-              onChange={(event) => setRoomId(event.currentTarget.value)}
-              placeholder="roomId"
-            />
-          </label>
-          <button type="submit">ルーム参加</button>
-        </form>
+          <div className="tip-grid">
+            <div className="tip">
+              <strong>編集トークン方式</strong>
+              入力できるのは編集URLだけ。観戦URLは読み取り専用です。
+            </div>
+            <div className="tip">
+              <strong>サーバー正の進行</strong>
+              手番とルール計算はDurable Objectで一元管理します。
+            </div>
+            <div className="tip">
+              <strong>undoは直前1手</strong>
+              誤入力に対応しつつ、競技進行を止めません。
+            </div>
+          </div>
 
-        {error && <p className="error-text">{error}</p>}
-      </section>
+          {error && <p className="error-text">{error}</p>}
+        </section>
+      </div>
     </main>
   );
 }
