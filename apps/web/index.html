@@ -135,6 +135,68 @@
       white-space: nowrap;
     }
 
+    .section-tools {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .info-toggle {
+      position: relative;
+      display: inline-block;
+    }
+
+    .info-toggle summary {
+      list-style: none;
+    }
+
+    .info-toggle summary::-webkit-details-marker {
+      display: none;
+    }
+
+    .info-button {
+      width: 36px;
+      height: 36px;
+      display: grid;
+      place-items: center;
+      border-radius: 999px;
+      background: rgba(255,255,255,0.86);
+      border: 1px solid var(--line);
+      color: var(--muted);
+      font-weight: 900;
+      font-size: 0.92rem;
+      cursor: pointer;
+      user-select: none;
+      box-shadow: 0 6px 18px rgba(39, 51, 58, 0.07);
+    }
+
+    .info-panel {
+      position: absolute;
+      top: calc(100% + 8px);
+      right: 0;
+      width: min(320px, calc(100vw - 32px));
+      padding: 14px;
+      border-radius: 18px;
+      background: rgba(255,255,255,0.96);
+      border: 1px solid rgba(39, 51, 58, 0.1);
+      box-shadow: 0 14px 32px rgba(39, 51, 58, 0.12);
+      z-index: 30;
+      line-height: 1.6;
+      color: var(--muted);
+    }
+
+    .info-panel strong {
+      display: block;
+      margin-bottom: 6px;
+      color: var(--ink);
+      font-size: 0.95rem;
+    }
+
+    .info-panel p {
+      margin: 0;
+    }
+
     .draft-list {
       display: grid;
       gap: 12px;
@@ -239,12 +301,13 @@
       display: flex;
       gap: 8px;
       flex-wrap: wrap;
+      align-items: center;
     }
 
     .hero {
-      padding: 18px;
+      padding: 16px;
       display: grid;
-      gap: 14px;
+      gap: 10px;
       border: 1px solid rgba(255,255,255,0.7);
       position: relative;
       overflow: hidden;
@@ -295,9 +358,9 @@
 
     .hero-top {
       display: flex;
-      align-items: flex-start;
+      align-items: center;
       justify-content: space-between;
-      gap: 12px;
+      gap: 10px;
       flex-wrap: wrap;
       position: relative;
       z-index: 1;
@@ -316,43 +379,46 @@
     }
 
     .hero-title {
-      font-size: clamp(1.4rem, 2vw + 1rem, 2rem);
+      font-size: clamp(1.2rem, 1.5vw + 1rem, 1.7rem);
       font-weight: 900;
       letter-spacing: 0.02em;
     }
 
     .hero-sub {
-      margin: 6px 0 0;
+      margin: 4px 0 0;
       color: var(--muted);
-      line-height: 1.5;
+      line-height: 1.35;
+      font-size: 0.92rem;
     }
 
     .hero-score-row {
       display: flex;
-      gap: 14px;
-      align-items: center;
+      gap: 10px;
+      align-items: stretch;
       flex-wrap: wrap;
       position: relative;
       z-index: 1;
     }
 
     .hero-score {
-      font-size: clamp(4rem, 14vw, 6rem);
+      font-size: clamp(3.6rem, 12vw, 5rem);
       line-height: 0.94;
       font-weight: 900;
       letter-spacing: -0.04em;
-      min-width: 1.8em;
+      min-width: 1.45em;
     }
 
     .meta-stack {
       display: grid;
-      gap: 10px;
-      min-width: 165px;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 8px;
+      flex: 1;
+      min-width: min(280px, 100%);
     }
 
     .meta-box {
-      padding: 12px 14px;
-      border-radius: 18px;
+      padding: 10px 12px;
+      border-radius: 16px;
       background: rgba(255,255,255,0.75);
       border: 1px solid rgba(39, 51, 58, 0.06);
     }
@@ -415,12 +481,13 @@
     }
 
     .message {
-      padding: 14px 16px;
-      border-radius: 18px;
+      padding: 10px 12px;
+      border-radius: 14px;
       border: 1px solid rgba(39, 51, 58, 0.06);
       background: rgba(255,255,255,0.75);
-      line-height: 1.6;
+      line-height: 1.45;
       font-weight: 700;
+      font-size: 0.92rem;
     }
 
     .reach-callout {
@@ -586,25 +653,26 @@
 
     .scorepad {
       position: sticky;
-      bottom: 0;
-      padding: 16px;
+      top: 12px;
+      padding: 14px;
       background: rgba(246, 242, 232, 0.85);
       border: 1px solid rgba(255,255,255,0.7);
       backdrop-filter: blur(12px);
+      z-index: 8;
     }
 
     .scorepad-head {
       display: flex;
       justify-content: space-between;
       align-items: flex-start;
-      gap: 10px;
+      gap: 8px;
       flex-wrap: wrap;
-      margin-bottom: 14px;
+      margin-bottom: 10px;
     }
 
     .scorepad h3 {
       margin: 0;
-      font-size: 1.1rem;
+      font-size: 1rem;
     }
 
     .scorepad-note {
@@ -653,7 +721,7 @@
 
     .miss-btn {
       width: 100%;
-      min-height: calc(var(--tap) - 2px);
+      min-height: 58px;
       margin-top: 10px;
       background: rgba(217, 75, 75, 0.1);
       color: var(--danger);
@@ -774,6 +842,22 @@
       border: 0;
     }
 
+    .game-layout {
+      display: grid;
+      gap: 16px;
+    }
+
+    .game-main {
+      display: grid;
+      gap: 16px;
+    }
+
+    .game-side {
+      display: grid;
+      gap: 16px;
+      order: -1;
+    }
+
     @media (min-width: 740px) {
       .score-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
       .game-layout {
@@ -783,10 +867,9 @@
         align-items: start;
       }
       .game-side {
-        display: grid;
-        gap: 16px;
         position: sticky;
         top: 12px;
+        order: 0;
       }
       .scorepad { position: static; }
     }
@@ -795,8 +878,26 @@
       :root { --tap: 64px; }
       .app { padding-left: 12px; padding-right: 12px; }
       .setup-card, .panel, .hero, .scorepad, .finish { padding: 16px; }
-      .hero-score { font-size: clamp(3.6rem, 21vw, 4.8rem); }
+      .hero-score { font-size: clamp(3.1rem, 18vw, 4rem); }
+      .hero-score-row {
+        display: grid;
+        grid-template-columns: auto 1fr;
+      }
+      .hero-top {
+        align-items: flex-start;
+      }
+      .hero-sub:empty {
+        display: none;
+      }
+      .info-panel {
+        right: -4px;
+        width: min(300px, calc(100vw - 24px));
+      }
+      .players-grid {
+        grid-template-columns: 1fr;
+      }
       .score-grid { gap: 8px; }
+      .score-btn { min-height: 58px; }
       .player-score { font-size: 2.2rem; }
     }
   </style>
@@ -940,9 +1041,21 @@
       if (!player) return "";
       if (isReach(player)) {
         const shot = winningShot(player);
-        return `✨ リーチ中。次に ${shot} 点で 50 点ちょうどです。`;
+        return `次に ${shot} 点で勝ち。`;
       }
-      return "累積ポイントを大きく表示。初心者でも「あ、いま誰の番か」が迷子になりません。";
+      return "";
+    }
+
+    function renderInfoToggle(title, body) {
+      return `
+        <details class="info-toggle">
+          <summary class="info-button" aria-label="${escapeHtml(title)}">(i)</summary>
+          <div class="info-panel">
+            <strong>${escapeHtml(title)}</strong>
+            ${body}
+          </div>
+        </details>
+      `;
     }
 
     function renderReachCallout(player) {
@@ -970,7 +1083,8 @@
     function playerStateText(player) {
       if (player.retired) return "ゲーム終了";
       if (isReach(player)) return `${winningShot(player)} で勝ち`;
-      return "プレイ中";
+      if (player.missStreak > 0) return `ミス ${player.missStreak}/3`;
+      return "";
     }
 
     function progress(player) {
@@ -981,19 +1095,16 @@
       return [0, 1, 2].map(i => `<span class="miss-dot ${player.missStreak > i ? "on" : ""}"></span>`).join("");
     }
 
-    function statusBadge(player, active) {
+    function statusBadge(player) {
       if (player.retired) {
         return `<span class="badge out">⛔ リタイア</span>`;
       }
       const badges = [];
-      if (active) badges.push(`<span class="badge safe">👉 いま投げる人</span>`);
       if (isReach(player)) {
         badges.push(`<span class="badge reach">✨ リーチ</span>`);
         badges.push(`<span class="badge reach">🎯 ${winningShot(player)} で勝ち</span>`);
       } else if (player.missStreak > 0) {
         badges.push(`<span class="badge warn">⚠️ ミス ${player.missStreak}/3</span>`);
-      } else {
-        badges.push(`<span class="badge safe">🟢 プレイ中</span>`);
       }
       return badges.join("");
     }
@@ -1005,9 +1116,13 @@
           <div class="title-row">
             <div class="title-wrap">
               <h1>モルック スコア</h1>
-              <p class="subtitle">スマホでタップ入力。累積ポイント、リーチ強調、連続ミスの赤み表示まで入れた、初心者向けの見やすい版です。</p>
             </div>
-            <div class="pill">🔰 上から順に投げます</div>
+            <div class="section-tools">
+              ${renderInfoToggle("使い方", `
+                <p>点数ボタンを押すと次の人へ進みます。38点からは勝ち筋を強調し、3連続ミスはリタイアです。</p>
+              `)}
+              <div class="pill">🔰 上から順に投げます</div>
+            </div>
           </div>
 
           <div class="draft-list">
@@ -1026,21 +1141,6 @@
             <button type="button" class="primary-btn" data-action="start-game" ${canStart ? "" : "disabled"}>ゲーム開始</button>
             ${state.players.length ? `<button type="button" class="ghost-btn" data-action="resume-game">保存中のゲームに戻る</button>` : ""}
             ${state.players.length || state.log.length ? `<button type="button" class="danger-btn" data-action="discard-save">保存データを消す</button>` : ""}
-          </div>
-
-          <div class="tip-grid">
-            <div class="tip">
-              <strong>タップで入力</strong>
-              点数ボタンを押すと、そのまま次の人へ自動で進みます。紙よりだいぶ平和です。
-            </div>
-            <div class="tip">
-              <strong>リーチを強調</strong>
-              38点からカードを光らせて、あと何点かと勝ち筋の数字を大きく表示します。
-            </div>
-            <div class="tip">
-              <strong>ミスは赤く</strong>
-              連続ミス 1 → 2 → 3 でだんだん赤くなり、3回でリタイア表示になります。
-            </div>
           </div>
         </section>
       `;
@@ -1065,9 +1165,11 @@
           <div class="game-header">
             <div class="title-wrap">
               <h2>ゲーム中</h2>
-              <p class="subtitle">点数をタップすると自動で次の人へ。38点からはリーチ演出で少し盛り上がります。</p>
             </div>
             <div class="top-actions">
+              ${renderInfoToggle("プレイ中の見方", `
+                <p>入力は先頭のスコアパッドから行います。1本倒しは数字、そのほかは倒れた本数を押します。</p>
+              `)}
               <button type="button" class="ghost-btn" data-action="undo-turn" ${undoStack.length ? "" : "disabled"}>↩︎ 1手もどす</button>
               <button type="button" class="ghost-btn" data-action="back-setup">メンバー編集</button>
               <button type="button" class="danger-btn" data-action="reset-game">新しいゲーム</button>
@@ -1076,6 +1178,26 @@
         </section>
 
         <section class="game-layout">
+          <aside class="game-side">
+            <section class="scorepad card${isReach(player) ? " reach-mode" : ""}">
+              <div class="scorepad-head">
+                <div>
+                  <h3>${escapeHtml(player.name)} の得点をタップ</h3>
+                </div>
+                <div class="section-tools">
+                  ${renderInfoToggle("入力ルール", `<p>${escapeHtml(scorepadNote(player))}</p>`)}
+                  <div class="pill">自動で次の人へ</div>
+                </div>
+              </div>
+              <div class="score-grid">
+                ${Array.from({ length: 12 }, (_, index) => index + 1).map(value => `
+                  <button type="button" class="score-btn${winningShot(player) === value ? " finisher" : ""}" data-action="score" data-score="${value}" ${winningShot(player) === value ? 'aria-label="' + value + ' 点 これで勝ち"' : ''}>${value}</button>
+                `).join("")}
+              </div>
+              <button type="button" class="miss-btn" data-action="miss">MISS / 0点</button>
+            </section>
+          </aside>
+
           <div class="game-main">
             <section class="${heroClass(player)}">
               <div class="hero-top">
@@ -1085,7 +1207,7 @@
                   <p class="hero-sub">${escapeHtml(heroSubtitle(player))}</p>
                 </div>
                 <div class="badge-row">
-                  ${statusBadge(player, true)}
+                  ${statusBadge(player)}
                 </div>
               </div>
 
@@ -1121,9 +1243,13 @@
               <div class="title-row">
                 <div class="title-wrap">
                   <h3>全員のスコア</h3>
-                  <p class="subtitle">リーチは黄色っぽく、連続ミスは赤っぽく。色だけでなく文字でも状態を出しています。</p>
                 </div>
-                <div class="pill">合計 ${state.players.length} 人</div>
+                <div class="section-tools">
+                  ${renderInfoToggle("表示の意味", `
+                    <p>黄色はリーチ、赤みは連続ミス。現在の投擲者だけ「番」で示します。</p>
+                  `)}
+                  <div class="pill">合計 ${state.players.length} 人</div>
+                </div>
               </div>
               <div class="players-grid">
                 ${state.players.map((item, index) => `
@@ -1142,10 +1268,7 @@
                     </div>
                     <div class="miss-strip">
                       <span class="miss-dots">${missDots(item)}</span>
-                      <span>${playerStateText(item)}</span>
-                    </div>
-                    <div class="badge-row">
-                      ${statusBadge(item, index === state.currentIndex)}
+                      ${playerStateText(item) ? `<span>${playerStateText(item)}</span>` : ``}
                     </div>
                   </article>
                 `).join("")}
@@ -1154,7 +1277,7 @@
 
             <section class="panel card">
               <details>
-                <summary>🔰 初心者メモ</summary>
+                <summary>ルールを見る</summary>
                 <div class="rule-list">
                   <div><strong>1本だけ倒したら</strong> → 倒したピンの数字が点数</div>
                   <div><strong>2本以上倒したら</strong> → 倒れた本数が点数</div>
@@ -1163,30 +1286,11 @@
                 </div>
               </details>
             </section>
-          </div>
-
-          <aside class="game-side">
-            <section class="scorepad card${isReach(player) ? " reach-mode" : ""}">
-              <div class="scorepad-head">
-                <div>
-                  <h3>${escapeHtml(player.name)} の得点をタップ</h3>
-                  <div class="scorepad-note">${escapeHtml(scorepadNote(player))}</div>
-                </div>
-                <div class="pill">自動で次の人へ</div>
-              </div>
-              <div class="score-grid">
-                ${Array.from({ length: 12 }, (_, index) => index + 1).map(value => `
-                  <button type="button" class="score-btn${winningShot(player) === value ? " finisher" : ""}" data-action="score" data-score="${value}" ${winningShot(player) === value ? 'aria-label="' + value + ' 点 これで勝ち"' : ''}>${value}</button>
-                `).join("")}
-              </div>
-              <button type="button" class="miss-btn" data-action="miss">MISS / 0点</button>
-            </section>
 
             <section class="panel card">
               <div class="title-row">
                 <div class="title-wrap">
                   <h3>履歴</h3>
-                  <p class="subtitle">「あれ今だれ何点だっけ？」対策です。</p>
                 </div>
                 <div class="pill">${state.log.length} 手</div>
               </div>
@@ -1202,7 +1306,7 @@
                 `).join("") : `<div class="history-item"><div class="history-main"><strong>まだ履歴なし</strong><span class="muted">最初の1投を入れるとここに出ます。</span></div><div class="history-score">-</div></div>`}
               </div>
             </section>
-          </aside>
+          </div>
         </section>
       `;
     }
