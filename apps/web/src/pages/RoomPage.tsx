@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
+import { QRCodeSVG } from "qrcode.react";
 import { fetchSnapshot, wsUrl } from "../api";
 import type { ActionInput, RoomState } from "../types";
 
@@ -164,6 +165,20 @@ export function RoomPage() {
           <p>
             <strong>編集URL:</strong> <code>{editUrl}</code>
           </p>
+          <div className="qr-grid">
+            <figure className="qr-card">
+              <figcaption>閲覧QR（仲間向け）</figcaption>
+              <QRCodeSVG value={viewUrl} size={168} level="M" includeMargin />
+              <small className="muted">読み取るとこのルームを開きます。</small>
+            </figure>
+            {token && (
+              <figure className="qr-card">
+                <figcaption>編集QR（スコア入力あり）</figcaption>
+                <QRCodeSVG value={editUrl} size={168} level="M" includeMargin />
+                <small className="warning-text">編集QRは運営メンバーのみに共有してください。</small>
+              </figure>
+            )}
+          </div>
         </div>
 
         <section>

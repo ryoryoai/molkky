@@ -110,6 +110,31 @@ button:disabled {
   gap: 8px;
 }
 
+.qr-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+  gap: 10px;
+}
+
+.qr-card {
+  margin: 0;
+  border: 1px solid #d1d5db;
+  border-radius: 10px;
+  padding: 10px;
+  background: #ffffff;
+  display: grid;
+  justify-items: center;
+  gap: 8px;
+}
+
+.qr-card figcaption {
+  font-weight: 600;
+}
+
+.qr-card small {
+  text-align: center;
+}
+
 code {
   white-space: pre-wrap;
   word-break: break-all;
@@ -144,6 +169,10 @@ td {
 
 .info-text {
   color: #1d4ed8;
+}
+
+.warning-text {
+  color: #b45309;
 }
 
 @media (max-width: 700px) {
